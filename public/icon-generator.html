@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Futterwacken Icon Generator</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #1F2937; color: #F9FAFB; padding: 2rem; }
+        canvas { border: 1px solid #374151; margin-bottom: 1rem; display: block; }
+        button { font-size: 1rem; padding: 0.5rem 1rem; border-radius: 8px; border: none; background: #3B82F6; color: white; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Icon Generator</h1>
+    <p>Click each button to download the icon. Then, upload the downloaded files to your <strong>public/icons/</strong> folder in StackBlitz.</p>
+
+    <canvas id="canvas192" width="192" height="192"></canvas>
+    <button onclick="downloadIcon('canvas192', 'icon-192.png')">Download 192x192 Icon</button>
+
+    <br><br>
+
+    <canvas id="canvas512" width="512" height="512" style="width: 192px; height: 192px;"></canvas>
+    <button onclick="downloadIcon('canvas512', 'icon-512.png')">Download 512x512 Icon</button>
+
+    <script>
+        function createIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Background
+            ctx.fillStyle = '#1F2937';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Blue circle
+            ctx.fillStyle = '#3B82F6';
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Text "FW"
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = `bold ${size * 0.4}px system-ui`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('FW', size / 2, size / 2);
+        }
+
+        function downloadIcon(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+        }
+
+        createIcon('canvas192', 192);
+        createIcon('canvas512', 512);
+    </script>
+</body>
+</html>

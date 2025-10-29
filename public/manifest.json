@@ -1,23 +1,23 @@
 {
   "name": "Futterwacken",
   "short_name": "Futterwacken",
-  "description": "Learn from videos with spaced repetition reminders",
-  "theme_color": "#1a1a1a",
-  "background_color": "#000000",
-  "display": "standalone",
-  "scope": "/",
+  "description": "Learn from videos with spaced repetition reminders.",
   "start_url": "/",
-  "orientation": "portrait",
+  "display": "standalone",
+  "background_color": "#1F2937",
+  "theme_color": "#1B232E",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%231a1a1a'/><circle cx='96' cy='96' r='67' fill='%234a9eff'/><text x='96' y='96' text-anchor='middle' dy='.3em' fill='white' font-size='72' font-weight='bold'>VL</text></svg>",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%231a1a1a'/><circle cx='256' cy='256' r='179' fill='%234a9eff'/><text x='256' y='256' text-anchor='middle' dy='.3em' fill='white' font-size='192' font-weight='bold'>VL</text></svg>",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
