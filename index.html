@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <!-- Make it mobile-friendly -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="VidLearn">
+    
+    <!-- Link to manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Icons for iOS -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    
+    <title>Futterwacken</title>
+    
+    <!-- Register Service Worker -->
+    <script>
+      // Check if browser supports service workers
+      if ('serviceWorker' in navigator) {
+        // Wait for page to load
+        window.addEventListener('load', () => {
+          // Register our service worker
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Service Worker registered'))
+            .catch(err => console.log('Service Worker registration failed'));
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <!-- Vue app mounts here -->
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
