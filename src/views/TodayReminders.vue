@@ -311,7 +311,7 @@ box-shadow: none;
 
 /* Cards: pill shape with shadow */
 .reminder-card {
-border-radius: 48px;
+border-radius: 15px;
 overflow: hidden;
 padding: var(--space-md);
 margin-bottom: var(--space-md);
@@ -467,16 +467,7 @@ background: var(--bg-tertiary);
 .dot-file { background: var(--text-secondary); }
 .dot-link { background: var(--accent-primary); }
 
-/* Notes clamped */
-.clamp-2 {
-display: -webkit-box;
--webkit-line-clamp: 2;
--webkit-box-orient: vertical;
-overflow: hidden;
-color: var(--text-secondary);
-font-size: 14px;
-margin-top: 6px;
-}
+
 
 /* Day 42 decision panel */
 .day42-decision {
