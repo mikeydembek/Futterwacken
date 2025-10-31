@@ -47,8 +47,8 @@ class NotificationManager {
 
     // Default options
     const defaultOptions = {
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      icon: '/notification-icon.png',
+      badge: '/notification-icon.png',
       vibrate: [200, 100, 200],
       tag: 'video-reminder',
       requireInteraction: true, // Don't auto-dismiss
@@ -74,38 +74,53 @@ class NotificationManager {
 
   // Check if we should show notifications
   checkForNotifications() {
-    const now = new Date()
-    const lastCheck = localStorage.getItem('lastNotificationCheck')
-    const lastCheckDate = lastCheck ? new Date(lastCheck) : null
-    
-    // Only check once per day
-    if (lastCheckDate && this.isSameDay(now, lastCheckDate)) {
-      console.log('Already checked notifications today')
-      return
+    // Only check once per day and at the right time (existing logic)
+    const now = new Date();
+    const settings = this.getSettings();
+    const [hour, minute] = settings.time.split(':').map(Number);
+    const lastCheck = localStorage.getItem('lastNotificationCheck');
+    const lastCheckDate = lastCheck ? new Date(lastCheck) : null;
+  
+    const hasCheckedToday = lastCheckDate && this.isSameDay(now, lastCheckDate);
+    const isTimeForNotification = now.getHours() === hour && now.getMinutes() === minute;
+  
+    // Check if it's time and we haven't already sent one today
+    if (!isTimeForNotification || hasCheckedToday) {
+      // On app startup, we can check regardless of time if we haven't checked today
+      if (!lastCheckDate || !this.isSameDay(now, lastCheckDate)) {
+          // Find reminders without sending a notification, just to have the count ready
+      } else {
+          return; // Not time yet or already checked
+      }
     }
-
+  
     // Get today's reminders
-    const videos = JSON.parse(localStorage.getItem('videos') || '[]')
-    const todaysReminders = this.getTodaysReminders(videos)
-    
+    const videos = JSON.parse(localStorage.getItem('videos') || '[]');
+    const todaysReminders = this.getTodaysReminders(videos).filter(r => !r.currentReminder.completed); // Only notify for PENDING videos
+  
     if (todaysReminders.length > 0) {
-      // Show notification
-      const title = `📚 ${todaysReminders.length} Video${todaysReminders.length > 1 ? 's' : ''} to Review Today`
-      const videoTitles = todaysReminders.slice(0, 3).map(r => `• ${r.title}`).join('\n')
-      const body = videoTitles + (todaysReminders.length > 3 ? `\n... and ${todaysReminders.length - 3} more` : '')
-      
-      this.showNotification('Futterwacken Reminder 🎉', {
-        body: "You have videos to review!",
+      // --- THIS IS THE SECTION THAT IS CHANGING ---
+  
+      // 1. Title is now clean and text-only
+      const title = `${todaysReminders.length} Video${todaysReminders.length > 1 ? 's' : ''} to Review Today`;
+  
+      // 2. Body is now a simple list of video titles, no icons/emojis
+      const videoTitles = todaysReminders.slice(0, 3).map(r => r.title).join('\n');
+      const body = videoTitles + (todaysReminders.length > 3 ? `\n...and ${todaysReminders.length - 3} more` : '');
+  
+      // 3. Show the notification
+      this.showNotification(title, {
+        body: body,
         data: { 
           url: '/', 
           tab: 'today',
           count: todaysReminders.length 
         }
-      })
+      });
     }
 
     // Update last check time
-    localStorage.setItem('lastNotificationCheck', now.toISOString())
+    localStorage.setItem('lastNotificationCheck', now.toISOString());
   }
 
   // Get today's reminders (similar to store logic)

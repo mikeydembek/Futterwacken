@@ -185,7 +185,10 @@ methods: {
     this.selectedFile = file
     this.errorMessage = ''
     if (!this.videoTitle.trim()) {
-      this.videoTitle = file.name.replace(/\.[^/.]+$/, '')
+      // THIS IS THE FIX - Replacing the regex
+      const lastDot = file.name.lastIndexOf('.');
+      const nameWithoutExt = (lastDot === -1) ? file.name : file.name.substring(0, lastDot);
+      this.videoTitle = nameWithoutExt;
     }
   },
   async saveVideo() {
@@ -270,10 +273,10 @@ max-width: 500px;
 
 /* Actions cards (pill-like) */
 .actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  margin-bottom: var(--space-lg); /* Add this for more space below */
+display: flex;
+flex-direction: column;
+gap: var(--space-md);
+margin-bottom: var(--space-lg); /* Add this for more space below */
 }
 .action-card {
 width: 100%;
