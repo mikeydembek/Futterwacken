@@ -273,7 +273,7 @@ box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.
 /* Backgrounds per spec */
 .badge-total { background: var(--bg-tertiary); }
 /* UPDATED: Brighter color for completed badge */
-.badge-completed { background: #9CA3AF; }
+.badge-completed { background: #ffffff; }
 .badge-pending { background: var(--accent-primary); }
 
 /* Sections */

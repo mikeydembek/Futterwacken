@@ -38,18 +38,33 @@ class NotificationManager {
     return this.settings;
   }
 
-  // Request notification permission
-  async requestPermission() {
+   // Request notification permission (supports both Promise and callback forms for iOS)
+   async requestPermission() {
     if (typeof Notification === 'undefined') {
       console.log('Notifications not supported');
       return 'denied';
     }
 
     try {
-      const permission = await Notification.requestPermission();
-      this.permission = permission;
-      console.log('Notification permission:', permission);
-      return permission;
+      let result = null;
+
+      // Some versions of iOS Safari implement a callback instead of a Promise.
+      const maybePromise = Notification.requestPermission((permission) => {
+        // Callback form (older Safari/iOS)
+        result = permission;
+      });
+
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        // Modern browsers return a Promise
+        result = await maybePromise;
+      } else if (!result) {
+        // Fallback: read current state if callback didn’t fire synchronously
+        result = Notification.permission;
+      }
+
+      this.permission = result || 'default';
+      console.log('Notification permission:', this.permission);
+      return this.permission;
     } catch (error) {
       console.error('Error requesting notification permission:', error);
       return 'denied';

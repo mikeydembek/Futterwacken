@@ -89,72 +89,103 @@
 import { notificationManager } from '../utils/notifications';
 
 export default {
-name: 'NotificationSettings',
-data() {
-  return {
-    permissionStatus: 'default',
-    settings: {
-      enabled: true,
-      time: '09:00',
-      sound: true,
-      vibrate: true
-    },
-    browserWarning: ''
-  };
-},
-computed: {
-  permissionStatusText() {
-    const statusMap = {
-      granted: '✅ Enabled',
-      denied: '❌ Blocked',
-      default: '⏸️ Not Set'
+  name: 'NotificationSettings',
+  data() {
+    return {
+      permissionStatus: 'default',
+      settings: {
+        enabled: true,
+        time: '09:00',
+        sound: true,
+        vibrate: true
+      },
+      browserWarning: '',
+      // iOS/PWA detection
+      isIOS: false,
+      isStandalone: false
     };
-    return statusMap[this.permissionStatus] || 'Unknown';
-  }
-},
-methods: {
-  async requestPermission() {
-    const granted = await notificationManager.requestPermission();
-    this.updatePermissionStatus();
+  },
+  computed: {
+    permissionStatusText() {
+      const statusMap = {
+        granted: '✅ Enabled',
+        denied: '❌ Blocked',
+        default: '⏸️ Not Set'
+      };
+      return statusMap[this.permissionStatus] || 'Unknown';
+    }
+  },
+  methods: {
+    detectEnvironment() {
+      const ua = navigator.userAgent || '';
+      this.isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+
+      const standaloneMedia = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      // iOS-specific legacy flag
+      const standaloneLegacy = 'standalone' in navigator && navigator.standalone;
+      this.isStandalone = !!(standaloneMedia || standaloneLegacy);
+
+      // Helpful guidance for iOS when not installed
+      if (this.isIOS && !this.isStandalone) {
+        this.browserWarning = 'On iPhone/iPad, notifications only work after you install the app to your Home Screen and open it from there. In Safari: Share → Add to Home Screen, then open the app and try again.';
+      } else {
+        this.browserWarning = '';
+      }
+    },
+
+    async requestPermission() {
+      // iOS: avoid a dead click and show guidance if not installed
+      this.detectEnvironment();
+      if (this.isIOS && !this.isStandalone) {
+        // Keep the UI unchanged but provide clear guidance
+        // (We do not change button visibility, just avoid a no-op)
+        return;
+      }
+
+      const granted = await notificationManager.requestPermission();
+      await this.updatePermissionStatus();
+
+      if (this.permissionStatus === 'granted') {
+        notificationManager.scheduleDailyCheck();
+        notificationManager.setupBackgroundSync();
+      } else if (this.isIOS && this.permissionStatus === 'denied') {
+        // iOS: once denied, it must be re-enabled in Settings
+        this.browserWarning = 'Notifications are blocked. On iOS, open Settings → Notifications → Futterwacken and enable “Allow Notifications”, then reopen the app and try again.';
+      }
+    },
     
-    if (granted === 'granted') {
+    testNotification() {
+      notificationManager.testNotification();
+    },
+    
+    updatePermissionStatus() {
+      if ('Notification' in window) {
+        this.permissionStatus = Notification.permission;
+      }
+    },
+    
+    loadSettings() {
+      this.settings = notificationManager.getSettings();
+    },
+    
+    saveSettings() {
+      notificationManager.saveSettings(this.settings);
+      if (this.settings.enabled && this.permissionStatus === 'granted') {
+        notificationManager.scheduleDailyCheck();
+      }
+    }
+  },
+  mounted() {
+    this.detectEnvironment();
+    this.updatePermissionStatus();
+    this.loadSettings();
+    console.log('Current notification permission:', this.permissionStatus);
+    
+    if (this.permissionStatus === 'granted' && this.settings.enabled) {
       notificationManager.scheduleDailyCheck();
       notificationManager.setupBackgroundSync();
     }
-  },
-  
-  testNotification() {
-    notificationManager.testNotification();
-  },
-  
-  updatePermissionStatus() {
-    if ('Notification' in window) {
-      this.permissionStatus = Notification.permission;
-    }
-  },
-  
-  loadSettings() {
-    this.settings = notificationManager.getSettings();
-  },
-  
-  saveSettings() {
-    notificationManager.saveSettings(this.settings);
-    
-    if (this.settings.enabled && this.permissionStatus === 'granted') {
-      notificationManager.scheduleDailyCheck();
-    }
   }
-},
-mounted() {
-  this.updatePermissionStatus();
-  this.loadSettings();
-  console.log('Current notification permission:', this.permissionStatus);
-  
-  if (this.permissionStatus === 'granted' && this.settings.enabled) {
-    notificationManager.scheduleDailyCheck();
-    notificationManager.setupBackgroundSync();
-  }
-}
 };
 </script>
 
