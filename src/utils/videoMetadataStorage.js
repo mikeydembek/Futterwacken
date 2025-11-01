@@ -1,52 +1,141 @@
 class VideoMetadataStorage {
   constructor() {
-    this.dbName = 'FutterwackenVideoData';
-    this.dbVersion = 1;
-    this.storeName = 'videos';
     this.db = null;
+    this.dbName = 'FutterwackenVideoData';
+    this.version = 1;
+    this.initPromise = null;
   }
 
-  async initDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.dbVersion);
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains(this.storeName)) {
-          db.createObjectStore(this.storeName, { keyPath: 'id' });
-        }
-      };
-      request.onsuccess = (event) => { this.db = event.target.result; resolve(this.db); };
-      request.onerror = (event) => reject(event.target.error);
+  async init() {
+    if (this.initPromise) return this.initPromise;
+    if (this.db) return Promise.resolve();
+    
+    this.initPromise = new Promise((resolve, reject) => {
+      try {
+        const request = indexedDB.open(this.dbName, this.version);
+        
+        request.onerror = () => {
+          console.error('IndexedDB open failed:', request.error);
+          this.initPromise = null;
+          reject(new Error('Failed to open IndexedDB'));
+        };
+        
+        request.onsuccess = (event) => {
+          this.db = event.target.result;
+          console.log('IndexedDB initialized successfully');
+          resolve();
+        };
+        
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains('videos')) {
+            db.createObjectStore('videos', { keyPath: 'id' });
+            console.log('Created videos object store');
+          }
+        };
+      } catch (error) {
+        console.error('Error opening IndexedDB:', error);
+        this.initPromise = null;
+        reject(error);
+      }
     });
-  }
-
-  async ensureDB() {
-    if (!this.db) await this.initDB();
-    return this.db;
+    
+    return this.initPromise;
   }
 
   async getAllVideos() {
-    const db = await this.ensureDB();
+    await this.init();
+    
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.storeName], 'readonly');
-      const store = transaction.objectStore(this.storeName);
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = (event) => reject(event.target.error);
+      try {
+        const transaction = this.db.transaction(['videos'], 'readonly');
+        const store = transaction.objectStore('videos');
+        const request = store.getAll();
+        
+        request.onsuccess = () => {
+          resolve(request.result || []);
+        };
+        
+        request.onerror = () => {
+          console.error('Error getting all videos:', request.error);
+          reject(new Error('Failed to get videos'));
+        };
+      } catch (error) {
+        console.error('Transaction error:', error);
+        reject(error);
+      }
     });
   }
 
-  async saveAllVideos(videos) {
-    const db = await this.ensureDB();
+  async saveVideo(video) {
+    await this.init();
+    
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.storeName], 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-      const clearRequest = store.clear();
-      clearRequest.onsuccess = () => {
-        videos.forEach(video => store.put(video));
-      };
-      transaction.oncomplete = () => resolve(true);
-      transaction.onerror = (event) => reject(event.target.error);
+      try {
+        const transaction = this.db.transaction(['videos'], 'readwrite');
+        const store = transaction.objectStore('videos');
+        const request = store.put(video);
+        
+        request.onsuccess = () => {
+          resolve();
+        };
+        
+        request.onerror = () => {
+          console.error('Error saving video:', request.error);
+          reject(new Error('Failed to save video'));
+        };
+      } catch (error) {
+        console.error('Transaction error:', error);
+        reject(error);
+      }
+    });
+  }
+
+  async deleteVideo(id) {
+    await this.init();
+    
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = this.db.transaction(['videos'], 'readwrite');
+        const store = transaction.objectStore('videos');
+        const request = store.delete(id);
+        
+        request.onsuccess = () => {
+          resolve();
+        };
+        
+        request.onerror = () => {
+          console.error('Error deleting video:', request.error);
+          reject(new Error('Failed to delete video'));
+        };
+      } catch (error) {
+        console.error('Transaction error:', error);
+        reject(error);
+      }
+    });
+  }
+
+  async clearAll() {
+    await this.init();
+    
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = this.db.transaction(['videos'], 'readwrite');
+        const store = transaction.objectStore('videos');
+        const request = store.clear();
+        
+        request.onsuccess = () => {
+          resolve();
+        };
+        
+        request.onerror = () => {
+          console.error('Error clearing videos:', request.error);
+          reject(new Error('Failed to clear videos'));
+        };
+      } catch (error) {
+        console.error('Transaction error:', error);
+        reject(error);
+      }
     });
   }
 }

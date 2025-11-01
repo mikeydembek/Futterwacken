@@ -119,8 +119,8 @@
 </template>
 
 <script>
-import { videoStore } from '../stores/videoStore'
-import { videoFileStorage } from '../utils/videoStorage'
+import { videoStore } from '../stores/videoStore';
+import { videoFileStorage } from '../utils/videoStorage';
 
 export default {
 name: 'AddVideo',
@@ -142,50 +142,50 @@ data() {
 
     // recent
     recentVideos: []
-  }
+  };
 },
 computed: {
   canSave() {
-    if (!this.videoTitle.trim()) return false
-    if (this.modalMode === 'url') return !!this.videoUrl.trim()
-    return !!this.selectedFile
+    if (!this.videoTitle.trim()) return false;
+    if (this.modalMode === 'url') return !!this.videoUrl.trim();
+    return !!this.selectedFile;
   }
 },
 methods: {
   openUrlModal() {
-    this.resetForm()
-    this.modalMode = 'url'
-    this.showModal = true
+    this.resetForm();
+    this.modalMode = 'url';
+    this.showModal = true;
   },
   openFileModal() {
-    this.resetForm()
-    this.modalMode = 'file'
-    this.showModal = true
+    this.resetForm();
+    this.modalMode = 'file';
+    this.showModal = true;
   },
   closeModal() {
-    this.showModal = false
-    this.errorMessage = ''
+    this.showModal = false;
+    this.errorMessage = '';
   },
   triggerFileInput() {
-    this.$refs.fileInput && this.$refs.fileInput.click()
+    this.$refs.fileInput && this.$refs.fileInput.click();
   },
   handleFileSelect(e) {
-    const file = e.target.files[0]
-    if (!file) return
+    const file = e.target.files[0];
+    if (!file) return;
     // basic checks
-    const max = 500 * 1024 * 1024
+    const max = 500 * 1024 * 1024;
     if (file.size > max) {
-      this.errorMessage = 'File too large (max 500MB)'
-      return
+      this.errorMessage = 'File too large (max 500MB)';
+      return;
     }
     if (!file.type.startsWith('video/')) {
-      this.errorMessage = 'Please select a video file'
-      return
+      this.errorMessage = 'Please select a video file';
+      return;
     }
-    this.selectedFile = file
-    this.errorMessage = ''
+    this.selectedFile = file;
+    this.errorMessage = '';
     if (!this.videoTitle.trim()) {
-      // THIS IS THE FIX - Replacing the regex
+      // iOS FIX - Replacing the regex with simple string manipulation
       const lastDot = file.name.lastIndexOf('.');
       const nameWithoutExt = (lastDot === -1) ? file.name : file.name.substring(0, lastDot);
       this.videoTitle = nameWithoutExt;
@@ -193,8 +193,8 @@ methods: {
   },
   async saveVideo() {
     try {
-      this.errorMessage = ''
-      const id = Date.now().toString()
+      this.errorMessage = '';
+      const id = Date.now().toString();
 
       const videoData = {
         id,
@@ -206,50 +206,50 @@ methods: {
         fileSize: this.selectedFile ? this.selectedFile.size : null,
         fileType: this.selectedFile ? this.selectedFile.type : null,
         dateAdded: new Date().toISOString()
-      }
+      };
 
       if (this.selectedFile) {
-        await videoFileStorage.saveVideoFile(id, this.selectedFile)
-        videoData.url = URL.createObjectURL(this.selectedFile)
-        videoData.localFile = true
+        await videoFileStorage.saveVideoFile(id, this.selectedFile);
+        videoData.url = URL.createObjectURL(this.selectedFile);
+        videoData.localFile = true;
       }
 
-      videoStore.addVideo(videoData)
+      videoStore.addVideo(videoData);
 
-      this.successMessage = 'Saved!'
-      this.loadRecent()
-      this.resetForm()
-      this.showModal = false
-      setTimeout(() => (this.successMessage = ''), 1200)
+      this.successMessage = 'Saved!';
+      this.loadRecent();
+      this.resetForm();
+      this.showModal = false;
+      setTimeout(() => (this.successMessage = ''), 1200);
     } catch (e) {
-      console.error(e)
-      this.errorMessage = 'Failed to save video'
+      console.error(e);
+      this.errorMessage = 'Failed to save video';
     }
   },
   resetForm() {
-    this.videoTitle = ''
-    this.videoUrl = ''
-    this.videoNotes = ''
-    this.selectedFile = null
-    if (this.$refs.fileInput) this.$refs.fileInput.value = ''
+    this.videoTitle = '';
+    this.videoUrl = '';
+    this.videoNotes = '';
+    this.selectedFile = null;
+    if (this.$refs.fileInput) this.$refs.fileInput.value = '';
   },
   loadRecent() {
-    this.recentVideos = (videoStore.videos || []).slice(0, 3)
+    this.recentVideos = (videoStore.videos || []).slice(0, 3);
   },
   timeAgo(iso) {
-    if (!iso) return ''
-    const d = new Date(iso)
-    const diff = (Date.now() - d.getTime()) / 1000
-    if (diff < 60) return 'just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`
-    return d.toLocaleDateString()
+    if (!iso) return '';
+    const d = new Date(iso);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
+    return d.toLocaleDateString();
   }
 },
 mounted() {
-  this.loadRecent()
+  this.loadRecent();
 }
-}
+};
 </script>
 
 <style scoped>
@@ -276,7 +276,7 @@ max-width: 500px;
 display: flex;
 flex-direction: column;
 gap: var(--space-md);
-margin-bottom: var(--space-lg); /* Add this for more space below */
+margin-bottom: var(--space-lg);
 }
 .action-card {
 width: 100%;
@@ -290,6 +290,7 @@ gap: var(--space-md);
 padding: 16px;
 text-align: left;
 transition: transform .1s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+cursor: pointer;
 /* New shadow to create a "hovering" effect */
 box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
 }
@@ -316,9 +317,6 @@ font-size: 16px;
 font-weight: 600;
 text-align: center;
 }
-.action-sub {
-display: none; /* Hide subtext */
-}
 
 /* Recent */
 .recent-section {
@@ -327,7 +325,7 @@ margin-top: var(--space-lg);
 .separator {
 width: 100%;
 height: 1px;
-background: #6B7280; /* Light gray */
+background: #6B7280;
 margin-block: var(--space-lg);
 }
 .recent-title {
@@ -339,7 +337,7 @@ margin-bottom: var(--space-sm);
 }
 .recent-card {
 border-radius: 16px;
-border: 1px solid #6B7280; /* Light gray */
+border: 1px solid #6B7280;
 background: var(--bg-secondary);
 padding: var(--space-md);
 margin-bottom: var(--space-sm);
@@ -354,6 +352,7 @@ gap: 2px;
 font-size: 14px;
 font-weight: 600;
 text-align: center;
+color: var(--text-primary);
 }
 .mini-info {
 display: flex;
@@ -407,6 +406,7 @@ align-items: center;
 text-align: center;
 font-size: 16px;
 font-weight: 600;
+color: var(--text-primary);
 }
 .modal-close {
 width: 36px; height: 36px;
@@ -439,6 +439,7 @@ height: auto;
 padding-top: var(--space-sm);
 padding-bottom: var(--space-sm);
 border-radius: 16px;
+resize: vertical;
 }
 .file-row { display: flex; align-items: center; gap: var(--space-sm); }
 .file-name { font-size: 12px; color: var(--text-secondary); }

@@ -1,50 +1,128 @@
-const CACHE_NAME = 'futterwacken-v3';
-const DB_NAME = 'FutterwackenVideoData';
-const DB_VERSION = 1;
-const STORE_NAME = 'videos';
+// Service Worker for Futterwacken
+const CACHE_NAME = 'futterwacken-v1';
+const urlsToCache = [
+  '/',
+  '/index.html'
+];
 
-// --- SERVICE WORKER LIFECYCLE ---
-
+// Install event
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: Installing...');
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        console.log('Opened cache');
+        return cache.addAll(urlsToCache);
+      })
+      .catch((error) => {
+        console.error('Cache installation failed:', error);
+      })
+  );
   self.skipWaiting();
 });
 
+// Activate event
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activating...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim())
+    })
+  );
+  self.clients.claim();
+});
+
+// Fetch event
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        // Cache hit - return response
+        if (response) {
+          return response;
+        }
+        return fetch(event.request);
+      })
+      .catch((error) => {
+        console.error('Fetch failed:', error);
+      })
   );
 });
 
-// --- NOTIFICATION AND SYNC LOGIC ---
-
-// Fired when a periodic sync is triggered
+// Periodic background sync for daily reminders
 self.addEventListener('periodicsync', (event) => {
   if (event.tag === 'check-reminders-daily') {
-    console.log('Service Worker: Periodic sync triggered.');
     event.waitUntil(checkAndNotify());
   }
 });
 
-// Fired when the notification is clicked
+// One-time background sync fallback
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'check-reminders') {
+    event.waitUntil(checkAndNotify());
+  }
+});
+
+// Function to check for reminders and show notification
+async function checkAndNotify() {
+  try {
+    // Check if we already showed a notification today
+    const today = new Date().toDateString();
+    
+    // Open IndexedDB to get videos
+    const db = await openDB();
+    const videos = await getAllVideos(db);
+    
+    // Filter for today's reminders
+    const todaysReminders = videos.filter(video => {
+      if (!video.reminders) return false;
+      return video.reminders.some(r => r.date === today);
+    });
+    
+    // Filter for pending (unwatched) reminders
+    const pendingReminders = todaysReminders.filter(video => {
+      const todayReminder = video.reminders.find(r => r.date === today);
+      return todayReminder && !todayReminder.watched;
+    });
+    
+    if (pendingReminders.length > 0) {
+      await self.registration.showNotification('Futterwacken Reminder', {
+        body: `You have ${pendingReminders.length} video${pendingReminders.length > 1 ? 's' : ''} to review today!`,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        tag: 'daily-reminder',
+        requireInteraction: false,
+        actions: [
+          {
+            action: 'open',
+            title: 'Open App'
+          }
+        ]
+      });
+    }
+  } catch (error) {
+    console.error('Error in checkAndNotify:', error);
+  }
+}
+
+// Handle notification click
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  
   event.waitUntil(
     clients.matchAll({ type: 'window' }).then((clientList) => {
+      // Check if there's already a window/tab open
       for (const client of clientList) {
-        if (new URL(client.url).pathname === '/' && 'focus' in client) {
+        if (client.url === '/' && 'focus' in client) {
           return client.focus();
         }
       }
+      // If not, open a new window/tab
       if (clients.openWindow) {
         return clients.openWindow('/');
       }
@@ -52,67 +130,52 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-
-// --- HELPER FUNCTIONS FOR THE SERVICE WORKER ---
-
-// Main function to check and show notification
-async function checkAndNotify() {
-  console.log('Service Worker: Running background check for notifications...');
-  try {
-    const videos = await getAllVideosFromDB();
-    const reminders = getTodaysReminders(videos);
-    const pendingReminders = reminders.filter(r => !r.currentReminder.completed);
-
-    if (pendingReminders.length > 0) {
-      console.log(`Service Worker: Found ${pendingReminders.length} pending reminders. Showing notification.`);
-      const title = `${pendingReminders.length} Video${pendingReminders.length > 1 ? 's' : ''} to Review Today`;
-      const body = pendingReminders.slice(0, 3).map(r => r.title).join('\n') + 
-                   (pendingReminders.length > 3 ? `\n...and ${pendingReminders.length - 3} more` : '');
-
-      await self.registration.showNotification(title, {
-        body: body,
-        icon: '/notification-icon.png',
-        badge: '/notification-icon.png',
-        tag: 'video-reminder',
-      });
-    } else {
-      console.log('Service Worker: No pending reminders for today.');
-    }
-  } catch (error) {
-    console.error('Service Worker: Error during background check:', error);
-  }
-}
-
-// Function to get videos directly from IndexedDB
-function getAllVideosFromDB() {
+// Helper function to open IndexedDB
+function openDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      const getAllRequest = store.getAll();
-      getAllRequest.onsuccess = () => resolve(getAllRequest.result || []);
-      getAllRequest.onerror = (event) => reject(event.target.error);
+    const request = indexedDB.open('FutterwackenVideoData', 1);
+    
+    request.onerror = () => {
+      reject(new Error('Failed to open IndexedDB'));
     };
-    request.onerror = (event) => reject(event.target.error);
+    
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('videos')) {
+        db.createObjectStore('videos', { keyPath: 'id' });
+      }
+    };
   });
 }
 
-// Re-implementation of getTodaysReminders inside the service worker
-function getTodaysReminders(videos) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const reminders = [];
-  videos.forEach(video => {
-    if (!video.isActive) return;
-    video.reminders?.forEach((reminder) => {
-      const reminderDate = new Date(reminder.date);
-      reminderDate.setHours(0, 0, 0, 0);
-      if (reminderDate.getTime() === today.getTime()) {
-        reminders.push({ ...video, currentReminder: reminder });
-      }
-    });
+// Helper function to get all videos from IndexedDB
+function getAllVideos(db) {
+  return new Promise((resolve, reject) => {
+    try {
+      const transaction = db.transaction(['videos'], 'readonly');
+      const store = transaction.objectStore('videos');
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        resolve(request.result || []);
+      };
+      
+      request.onerror = () => {
+        reject(new Error('Failed to get videos'));
+      };
+    } catch (error) {
+      reject(error);
+    }
   });
-  return reminders;
 }
+
+// Message event listener for communication with the app
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'CHECK_REMINDERS') {
+    event.waitUntil(checkAndNotify());
+  }
+});

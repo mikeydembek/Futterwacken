@@ -1,46 +1,91 @@
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import { VitePWA } from 'vite-plugin-pwa'
-import legacy from '@vitejs/plugin-legacy' // <-- This import is now correct
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { VitePWA } from 'vite-plugin-pwa';
+import legacy from '@vitejs/plugin-legacy';
 
 export default defineConfig({
   plugins: [
     vue(),
+    
+    // Legacy plugin for iOS compatibility
+    legacy({
+      targets: ['iOS >= 12', 'Safari >= 12', 'not dead'],
+      additionalLegacyPolyfills: ['regenerator-runtime/runtime'],
+      polyfills: true,
+      modernPolyfills: true,
+      renderLegacyChunks: true
+    }),
+    
     VitePWA({
       registerType: 'autoUpdate',
-      // Ensure you have these icon files in your public/ folder
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'], 
+      includeAssets: ['favicon.ico', 'icons/*.png'],
       manifest: {
         name: 'Futterwacken',
         short_name: 'Futterwacken',
-        description: 'A video learning reminder app.',
-        theme_color: '#1B232E',
+        description: 'Video learning with spaced repetition',
+        theme_color: '#667eea',
+        background_color: '#121212',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: '/icons/icon-192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
           }
         ]
+      },
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ]
       }
-    }),
-    // This legacy configuration is correct for version 4.x
-    legacy({
-      targets: ['defaults', 'not IE 11']
     })
   ],
+  
+  build: {
+    target: 'es2015', // Ensure compatibility with older browsers
+    outDir: 'dist',
+    sourcemap: true, // Enable for debugging
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vue-vendor': ['vue']
+        }
+      }
+    }
+  },
+  
   server: {
-    host: '0.0.0.0'
+    host: true, // Allow external connections for mobile testing
+    port: 3000
   }
-})
+});

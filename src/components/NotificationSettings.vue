@@ -86,8 +86,7 @@
 </template>
 
 <script>
-// We'll need the notificationManager for this component to work
-import { notificationManager } from '../utils/notifications.js';
+import { notificationManager } from '../utils/notifications';
 
 export default {
 name: 'NotificationSettings',
@@ -100,16 +99,15 @@ data() {
       sound: true,
       vibrate: true
     },
-    browserWarning: '',
-  }
+    browserWarning: ''
+  };
 },
 computed: {
-  // This was the source of the error. It's now correctly inside the 'computed' object.
   permissionStatusText() {
     const statusMap = {
       granted: '✅ Enabled',
       denied: '❌ Blocked',
-      default: '⏸️ Not Set',
+      default: '⏸️ Not Set'
     };
     return statusMap[this.permissionStatus] || 'Unknown';
   }
@@ -119,7 +117,7 @@ methods: {
     const granted = await notificationManager.requestPermission();
     this.updatePermissionStatus();
     
-    if (granted) {
+    if (granted === 'granted') {
       notificationManager.scheduleDailyCheck();
       notificationManager.setupBackgroundSync();
     }
@@ -150,17 +148,21 @@ methods: {
 mounted() {
   this.updatePermissionStatus();
   this.loadSettings();
+  console.log('Current notification permission:', this.permissionStatus);
   
   if (this.permissionStatus === 'granted' && this.settings.enabled) {
     notificationManager.scheduleDailyCheck();
     notificationManager.setupBackgroundSync();
   }
 }
-}
+};
 </script>
 
 <style scoped>
-/* All styles remain the same, just a simplified version for brevity */
+.notification-settings {
+padding: var(--space-md);
+}
+
 .settings-title {
 font-size: 16px;
 font-weight: 600;
@@ -188,6 +190,7 @@ font-weight: 600;
 .settings-card p.text-muted {
 text-align: center;
 font-size: 14px;
+color: var(--text-secondary);
 }
 
 .setting-row {
@@ -201,7 +204,10 @@ padding: var(--space-sm) 0;
 cursor: pointer;
 }
 
-.status { font-size: 14px; font-weight: 600; }
+.status { 
+font-size: 14px; 
+font-weight: 600; 
+}
 .status.granted { color: var(--accent-success); }
 .status.denied { color: var(--accent-danger); }
 .status.default { color: var(--accent-warning); }
@@ -222,7 +228,15 @@ padding: var(--space-md);
 background: rgba(244, 67, 54, 0.1);
 border-radius: var(--radius-md);
 }
-.permission-denied p { text-align: center; margin-bottom: 0; }
+.permission-denied p { 
+text-align: center; 
+margin-bottom: 0; 
+}
+.permission-denied p:first-child {
+margin-bottom: var(--space-sm);
+font-weight: 600;
+color: var(--accent-danger);
+}
 
 .time-input {
 background: var(--bg-tertiary);
@@ -242,7 +256,9 @@ border-radius: 12px;
 cursor: pointer;
 transition: background 0.3s;
 }
-input[type="checkbox"]:checked { background: var(--accent-primary); }
+input[type="checkbox"]:checked { 
+background: var(--accent-primary); 
+}
 input[type="checkbox"]::after {
 content: '';
 position: absolute;
@@ -254,7 +270,12 @@ top: 2px;
 left: 2px;
 transition: transform 0.3s;
 }
-input[type="checkbox"]:checked::after { transform: translateX(24px); }
+input[type="checkbox"]:checked::after { 
+transform: translateX(24px); 
+}
 
-.btn { width: 100%; margin-top: var(--space-md); }
+.btn { 
+width: 100%; 
+margin-top: var(--space-md); 
+}
 </style>

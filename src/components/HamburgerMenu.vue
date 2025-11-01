@@ -32,23 +32,23 @@
       </button>
     </div>
 
-  <!-- Menu Items (text only) -->
-<div v-if="!activeSection" class="menu-items">
-<button @click="openSettings('notifications')" class="menu-item">
-  <span class="menu-label">Notifications</span>
-  <span class="menu-arrow">›</span>
-</button>
+    <!-- Menu Items (text only) -->
+    <div v-if="!activeSection" class="menu-items">
+      <button @click="openSettings('notifications')" class="menu-item">
+        <span class="menu-label">Notifications</span>
+        <span class="menu-arrow">›</span>
+      </button>
 
-<button @click="openSettings('data')" class="menu-item">
-  <span class="menu-label">Data Management</span>
-  <span class="menu-arrow">›</span>
-</button>
+      <button @click="openSettings('data')" class="menu-item">
+        <span class="menu-label">Data Management</span>
+        <span class="menu-arrow">›</span>
+      </button>
 
-<button @click="openSettings('about')" class="menu-item">
-  <span class="menu-label">About</span>
-  <span class="menu-arrow">›</span>
-</button>
-</div>
+      <button @click="openSettings('about')" class="menu-item">
+        <span class="menu-label">About</span>
+        <span class="menu-arrow">›</span>
+      </button>
+    </div>
 
     <!-- Settings Content Area -->
     <div v-if="activeSection" class="settings-content">
@@ -57,19 +57,9 @@
         ‹ Back
       </button>
 
-      <!-- Notification Settings -->
-      <div v-if="activeSection === 'notifications'" class="settings-section">
-        <NotificationSettings />
-      </div>
-
-      <!-- Data Management -->
-      <div v-else-if="activeSection === 'data'" class="settings-section">
-        <DataManagement />
-      </div>
-
-      <!-- About Section -->
-      <div v-else-if="activeSection === 'about'" class="settings-section">
-        <AboutSection />
+      <!-- Content sections are now handled by main App -->
+      <div class="settings-section">
+        <p>Please close the menu to view {{ activeSection }} settings.</p>
       </div>
     </div>
   </div>
@@ -77,54 +67,47 @@
 </template>
 
 <script>
-import NotificationSettings from './NotificationSettings.vue'
-import DataManagement from './DataManagement.vue'
-import AboutSection from './AboutSection.vue'
-
 export default {
 name: 'HamburgerMenu',
-components: {
-  NotificationSettings,
-  DataManagement,
-  AboutSection
-},
 data() {
   return {
     isOpen: false,
     activeSection: null
-  }
+  };
 },
 methods: {
   toggleMenu() {
-    this.isOpen = !this.isOpen
+    this.isOpen = !this.isOpen;
     if (!this.isOpen) {
-      this.activeSection = null
+      this.activeSection = null;
     }
   },
   closeMenu() {
-    this.isOpen = false
-    this.activeSection = null
+    this.isOpen = false;
+    this.activeSection = null;
   },
   openSettings(section) {
-    this.activeSection = section
+    // Emit event to App.vue to change view
+    this.$emit('navigate', section);
+    this.closeMenu();
   },
   backToMenu() {
-    this.activeSection = null
+    this.activeSection = null;
   }
 },
 watch: {
   isOpen(newVal) {
     if (newVal) {
-      document.body.style.overflow = 'hidden'
+      document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = ''
+      document.body.style.overflow = '';
     }
   }
 },
 beforeUnmount() {
-  document.body.style.overflow = ''
+  document.body.style.overflow = '';
 }
-}
+};
 </script>
 
 <style scoped>
@@ -177,7 +160,7 @@ right: -100%;
 width: 85%;
 max-width: 400px;
 height: 100%;
-background: #1F2937; /* Darker gray background */
+background: #1F2937;
 z-index: 1001;
 transition: right 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 display: flex;
@@ -216,28 +199,27 @@ overflow-y: auto;
 flex: 1;
 }
 .menu-item {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr 24px; /* label + arrow */
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  background: var(--bg-secondary);
-  border: 1px solid var(--bg-tertiary);
-  border-radius: 48px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: var(--space-sm);
-  text-align: left;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+width: 100%;
+display: grid;
+grid-template-columns: 1fr 24px;
+align-items: center;
+gap: var(--space-md);
+padding: var(--space-md);
+background: var(--bg-secondary);
+border: 1px solid var(--bg-tertiary);
+border-radius: 48px;
+color: var(--text-primary);
+cursor: pointer;
+transition: all 0.2s;
+margin-bottom: var(--space-sm);
+text-align: left;
+box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
 }
 .menu-item:hover, .menu-item:focus-visible {
 border-color: var(--accent-primary);
 }
 .menu-item:active { transform: scale(0.98); }
 
-.menu-icon { font-size: 20px; width: 24px; text-align: center; }
 .menu-label { flex: 1; font-size: 16px; font-weight: 500; }
 .menu-arrow { font-size: 20px; color: var(--text-secondary); }
 
@@ -245,7 +227,7 @@ border-color: var(--accent-primary);
 .settings-content {
 position: absolute;
 top: 0; left: 0; right: 0; bottom: 0;
-background: #1F2937; /* Darker gray background */
+background: #1F2937;
 z-index: 1;
 display: flex; flex-direction: column;
 animation: slideIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);

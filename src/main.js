@@ -1,11 +1,13 @@
-// Import Vue's createApp function
-import { createApp } from 'vue'
+import { createApp } from 'vue';
+import './styles/global.css';
+import App from './App.vue';
 
-// Import our main App component
-import App from './App.vue'
+const app = createApp(App);
 
-// Import our global styles
-import './styles/global.css'
+// Global error handler
+app.config.errorHandler = (err, vm, info) => {
+  console.error('Vue Error:', err);
+  console.error('Error Info:', info);
+};
 
-// Create and mount the app
-createApp(App).mount('#app')
+app.mount('#app');

@@ -51,12 +51,12 @@
             <!-- Right: Round check toggle -->
             <button
               class="check-circle"
-              :class="{'is-checked': reminder.currentReminder.completed}"
+              :class="{'is-checked': reminder.currentReminder && reminder.currentReminder.completed}"
               @click="handleToggleWatched(reminder)"
-              :aria-pressed="reminder.currentReminder.completed ? 'true' : 'false'"
+              :aria-pressed="reminder.currentReminder && reminder.currentReminder.completed ? 'true' : 'false'"
               aria-label="Mark as watched"
             >
-              <svg v-if="reminder.currentReminder.completed" class="icon-check" viewBox="0 0 24 24" aria-hidden="true">
+              <svg v-if="reminder.currentReminder && reminder.currentReminder.completed" class="icon-check" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M20 6L9 17l-5-5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </button>
@@ -70,6 +70,7 @@
           <!-- Day 42 decision -->
           <div
             v-if="
+              reminder.currentReminder &&
               reminder.currentReminder.day === 42 &&
               reminder.currentReminder.completed &&
               showDay42Decision[reminder.id]
@@ -189,8 +190,8 @@
 </template>
 
 <script>
-import { videoStore } from '../stores/videoStore'
-import VideoPlayer from '../components/VideoPlayer.vue'
+import { videoStore } from '../stores/videoStore';
+import VideoPlayer from '../components/VideoPlayer.vue';
 
 export default {
 name: 'TodayReminders',
@@ -200,66 +201,68 @@ data() {
     showDay42Decision: {},
     selectedVideo: null,
     isPlayerOpen: false
-  }
+  };
 },
 computed: {
   todaysVideos() {
-    if (!videoStore || !videoStore.getTodaysReminders) return []
-    return videoStore.getTodaysReminders()
+    if (!videoStore || !videoStore.getTodaysReminders) return [];
+    return videoStore.getTodaysReminders();
   },
   pendingVideos() {
-    return this.todaysVideos.filter(v => !v.currentReminder.completed)
+    return this.todaysVideos.filter(v => !v.currentReminder.completed);
   },
   completedVideos() {
-    return this.todaysVideos.filter(v => v.currentReminder.completed)
+    return this.todaysVideos.filter(v => v.currentReminder.completed);
   },
   completedCount() {
-    return this.completedVideos.length
+    return this.completedVideos.length;
   },
   pendingCount() {
-    return this.pendingVideos.length
+    return this.pendingVideos.length;
   }
 },
 methods: {
   getReminderDayText(reminder) {
-    if (!reminder) return ''
-    if (reminder.day === 'Monthly') return '📅 Monthly Review'
+    if (!reminder) return '';
+    if (reminder.day === 'Monthly') return '📅 Monthly Review';
     const dayText = {
       1: 'Day 1 - Initial',
       2: 'Day 2 - First Review',
       5: 'Day 5 - Reinforcement',
       12: 'Day 12 - Consolidation',
       42: 'Day 42 - Final Review'
-    }
-    return dayText[reminder.day] || `Day ${reminder.day}`
+    };
+    return dayText[reminder.day] || `Day ${reminder.day}`;
   },
   openVideoPlayer(reminder) {
-    this.selectedVideo = reminder
-    this.isPlayerOpen = true
+    this.selectedVideo = reminder;
+    this.isPlayerOpen = true;
   },
   closeVideoPlayer() {
-    this.isPlayerOpen = false
-    this.selectedVideo = null
+    this.isPlayerOpen = false;
+    this.selectedVideo = null;
   },
   markVideoWatched() {
-    if (this.selectedVideo && !this.selectedVideo.currentReminder.completed) {
-      this.handleToggleWatched(this.selectedVideo)
+    if (this.selectedVideo && this.selectedVideo.currentReminder && !this.selectedVideo.currentReminder.completed) {
+      this.handleToggleWatched(this.selectedVideo);
     }
   },
   handleToggleWatched(reminder) {
-    if (!videoStore.toggleWatched) return
-    const isNowCompleted = videoStore.toggleWatched(reminder.id, reminder.reminderIndex)
-    this.showDay42Decision[reminder.id] = reminder.currentReminder.day === 42 && isNowCompleted
-    this.$forceUpdate()
+    if (!videoStore.toggleWatched) return;
+    const isNowCompleted = videoStore.toggleWatched(reminder.id, reminder.reminderIndex);
+    if (reminder.currentReminder) {
+      this.showDay42Decision[reminder.id] = reminder.currentReminder.day === 42 && isNowCompleted;
+    }
+    this.$forceUpdate();
   },
   setDay42Decision(videoId, repeatMonthly) {
-    if (!videoStore.setDay42Decision) return
-    videoStore.setDay42Decision(videoId, repeatMonthly)
-    this.showDay42Decision[videoId] = false
-    this.$forceUpdate()
+    if (!videoStore.setDay42Decision) return;
+    videoStore.setDay42Decision(videoId, repeatMonthly);
+    this.showDay42Decision[videoId] = false;
+    this.$forceUpdate();
   }
 }
-}
+};
 </script>
 
 <style scoped>
@@ -272,14 +275,14 @@ background: #1F2937;
 }
 
 .summary-badges {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-md);
-  padding-bottom: 0;
-  position: relative; /* Required for z-index to work */
-  z-index: 2;        /* Make sure badges are above the gradient overlay */
+display: flex;
+justify-content: center;
+align-items: center;
+gap: var(--space-sm);
+padding: var(--space-md);
+padding-bottom: 0;
+position: relative; /* Required for z-index to work */
+z-index: 2;        /* Make sure badges are above the gradient overlay */
 }
 
 .badge {
@@ -321,8 +324,8 @@ box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.
 }
 /* UNCHECKED: light tint + light grey outline */
 .card-pending {
-  background: rgba(156, 163, 175, 0.10);
-  border: 1px solid #6B7280; /* was #CBD5E1 */
+background: rgba(156, 163, 175, 0.10);
+border: 1px solid #6B7280;
 }
 .card-completed {
 background: rgba(75, 81, 90, 100);
@@ -358,6 +361,7 @@ display: grid;
 place-items: center;
 padding: 0;
 transition: box-shadow 0.15s ease, transform 0.1s ease;
+cursor: pointer;
 }
 .play-btn:active { transform: scale(0.98); }
 
@@ -381,6 +385,7 @@ place-items: center;
 padding: 0;
 transition: box-shadow 0.15s ease, transform 0.1s ease;
 color: var(--accent-primary);
+cursor: pointer;
 }
 .replay-btn:active { transform: scale(0.98); }
 
@@ -412,6 +417,7 @@ stroke-linecap: round;
 margin: 0;
 font-size: 16px;
 font-weight: 600;
+color: var(--text-primary);
 }
 .video-title.center { text-align: center; }
 
@@ -467,7 +473,19 @@ background: var(--bg-tertiary);
 .dot-file { background: var(--text-secondary); }
 .dot-link { background: var(--accent-primary); }
 
-
+/* Notes */
+.video-notes {
+margin-top: var(--space-sm);
+color: var(--text-secondary);
+font-size: 14px;
+line-height: 1.4;
+}
+.clamp-2 {
+display: -webkit-box;
+-webkit-line-clamp: 2;
+-webkit-box-orient: vertical;
+overflow: hidden;
+}
 
 /* Day 42 decision panel */
 .day42-decision {
@@ -477,6 +495,11 @@ background: var(--bg-tertiary);
 border-radius: var(--radius-md);
 }
 .decision-title { font-weight: 600; margin-bottom: var(--space-sm); }
+.decision-buttons {
+display: flex;
+gap: var(--space-sm);
+margin-top: var(--space-md);
+}
 
 /* Empty state */
 .empty-state { text-align: center; padding: var(--space-xl); }

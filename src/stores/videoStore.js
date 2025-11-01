@@ -1,92 +1,94 @@
-// src/stores/videoStore.js
 import { reactive } from 'vue';
 import { videoMetadataStorage } from '../utils/videoMetadataStorage';
 
 export const videoStore = reactive({
   videos: [],
-
+  
   async loadVideos() {
     try {
-      this.videos = await videoMetadataStorage.getAllVideos();
-    } catch (e) {
-      console.error("Failed to load videos from DB.", e);
-      this.videos = JSON.parse(localStorage.getItem('videos') || '[]');
+      const videos = await videoMetadataStorage.getAllVideos();
+      this.videos = videos || [];
+      console.log('Loaded videos from storage:', this.videos.length);
+    } catch (error) {
+      console.error('Error loading videos:', error);
+      this.videos = [];
     }
-  },
-
-  async saveToStorage() {
-    try {
-      await videoMetadataStorage.saveAllVideos(this.videos);
-      localStorage.setItem('videos', JSON.stringify(this.videos));
-    } catch (e) {
-      console.error("Failed to save videos to DB.", e);
-    }
-  },
-
-  async addVideo(videoData) {
-    const video = {
-      id: videoData.id || Date.now().toString(),
-      title: videoData.title,
-      url: videoData.url,
-      notes: videoData.notes || '',
-      isFileUpload: videoData.isFileUpload || false,
-      fileName: videoData.fileName || null,
-      fileSize: videoData.fileSize || null,
-      fileType: videoData.fileType || null,
-      localFile: videoData.localFile || false,
-      dateAdded: new Date().toISOString(),
-      reminders: [
-        { day: 1, date: this.getDateForDay(0), completed: true },
-        { day: 2, date: this.getDateForDay(1), completed: false },
-        { day: 5, date: this.getDateForDay(4), completed: false },
-        { day: 12, date: this.getDateForDay(11), completed: false },
-        { day: 42, date: this.getDateForDay(41), completed: false }
-      ],
-      repeatMonthly: null,
-      isActive: true
-    };
-    this.videos.unshift(video);
-    await this.saveToStorage();
-    return video;
-  },
-
-  async toggleWatched(videoId, reminderIndex) {
-    const video = this.videos.find(v => v.id === videoId);
-    if (!video || !video.reminders || !video.reminders[reminderIndex]) return false;
-    
-    video.reminders[reminderIndex].completed = !video.reminders[reminderIndex].completed;
-    await this.saveToStorage();
-    return video.reminders[reminderIndex].completed;
   },
   
-  async setDay42Decision(videoId, repeatMonthly) {
-    const video = this.videos.find(v => v.id === videoId);
-    if (!video) return;
-    video.repeatMonthly = repeatMonthly ? { startDate: new Date().toISOString(), lastDate: new Date().toISOString() } : null;
-    if (!repeatMonthly) video.isActive = false;
+  async saveToStorage() {
+    try {
+      for (const video of this.videos) {
+        await videoMetadataStorage.saveVideo(video);
+      }
+    } catch (error) {
+      console.error('Error saving to storage:', error);
+    }
+  },
+  
+  async addVideo(video) {
+    this.videos.push(video);
     await this.saveToStorage();
   },
-
-  getDateForDay(daysFromNow) {
-    const date = new Date();
-    date.setDate(date.getDate() + daysFromNow);
-    date.setHours(9, 0, 0, 0);
-    return date.toISOString();
+  
+  async updateVideo(updatedVideo) {
+    const index = this.videos.findIndex(v => v.id === updatedVideo.id);
+    if (index !== -1) {
+      this.videos[index] = updatedVideo;
+      await this.saveToStorage();
+    }
   },
-
+  
+  async deleteVideo(id) {
+    const index = this.videos.findIndex(v => v.id === id);
+    if (index !== -1) {
+      this.videos.splice(index, 1);
+      await videoMetadataStorage.deleteVideo(id);
+    }
+  },
+  
+  async toggleWatched(id, reminderDate) {
+    const video = this.videos.find(v => v.id === id);
+    if (video && video.reminders) {
+      const reminder = video.reminders.find(r => r.date === reminderDate);
+      if (reminder) {
+        reminder.watched = !reminder.watched;
+        await this.saveToStorage();
+      }
+    }
+  },
+  
   getTodaysReminders() {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const reminders = [];
-    this.videos.forEach(video => {
-      if (!video.isActive) return;
-      video.reminders?.forEach((reminder) => {
-        const rDate = new Date(reminder.date); rDate.setHours(0, 0, 0, 0);
-        if (rDate.getTime() === today.getTime()) {
-          reminders.push({ ...video, currentReminder: reminder });
-        }
+    const today = new Date().toDateString();
+    return this.videos.filter(video => {
+      return video.reminders && video.reminders.some(r => r.date === today);
+    });
+  },
+  
+  getUpcomingReminders() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return this.videos.filter(video => {
+      if (!video.reminders) return false;
+      return video.reminders.some(reminder => {
+        const reminderDate = new Date(reminder.date);
+        reminderDate.setHours(0, 0, 0, 0);
+        return reminderDate > today;
       });
     });
-    reminders.sort((a, b) => (a.currentReminder.completed ? 1 : 0) - (b.currentReminder.completed ? 1 : 0));
-    return reminders;
+  },
+  
+  getPastReminders() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return this.videos.filter(video => {
+      if (!video.reminders) return false;
+      return video.reminders.some(reminder => {
+        const reminderDate = new Date(reminder.date);
+        reminderDate.setHours(0, 0, 0, 0);
+        return reminderDate < today && !reminder.watched;
+      });
+    });
   }
 });

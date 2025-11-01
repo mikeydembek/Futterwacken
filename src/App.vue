@@ -3,21 +3,24 @@
   <!-- Header -->
   <header class="global-header">
     <div class="header-content">
-      <HamburgerMenu />
+      <HamburgerMenu @navigate="currentView = $event" />
     </div>
   </header>
   
   <!-- Main content area -->
   <main class="main-content">
-    <AddVideo v-if="activeTab === 'add'" />
-    <TodayReminders v-else-if="activeTab === 'today'" />
-    <Calendar v-else-if="activeTab === 'calendar'" />
+    <AddVideo v-if="currentView === 'add'" />
+    <TodayReminders v-else-if="currentView === 'today'" />
+    <Calendar v-else-if="currentView === 'calendar'" />
+    <NotificationSettings v-else-if="currentView === 'notifications'" />
+    <DataManagement v-else-if="currentView === 'data'" />
+    <AboutSection v-else-if="currentView === 'about'" />
   </main>
   
   <!-- Tab bar at bottom -->
   <TabBar 
-    :active-tab="activeTab" 
-    @change-tab="activeTab = $event"
+    :active-tab="currentView" 
+    @change-tab="currentView = $event"
   />
 </div>
 </template>
@@ -29,8 +32,11 @@ import HamburgerMenu from './components/HamburgerMenu.vue';
 import AddVideo from './views/AddVideo.vue';
 import TodayReminders from './views/TodayReminders.vue';
 import Calendar from './views/Calendar.vue';
+import NotificationSettings from './components/NotificationSettings.vue';
+import DataManagement from './components/DataManagement.vue';
+import AboutSection from './components/AboutSection.vue';
 import { notificationManager } from './utils/notifications';
-import { videoStore } from './stores/videoStore'; // Ensure this is correctly imported
+import { videoStore } from './stores/videoStore';
 
 export default {
 name: 'App',
@@ -39,22 +45,24 @@ components: {
   HamburgerMenu,
   AddVideo,
   TodayReminders,
-  Calendar
+  Calendar,
+  NotificationSettings,
+  DataManagement,
+  AboutSection
 },
 data() {
   return {
-    activeTab: 'today'
-  }
+    currentView: 'today'
+  };
 },
 computed: {
-  // These are fine but not displayed, keeping for potential future use
   headerTitle() {
     const titles = {
       'add': 'Add New Video',
       'today': "Today's Reminders",
       'calendar': 'Calendar'
     };
-    return titles[this.activeTab] || 'Futterwacken';
+    return titles[this.currentView] || 'Futterwacken';
   },
   headerSubtitle() {
     const subtitles = {
@@ -62,7 +70,7 @@ computed: {
       'today': this.getTodayDate(),
       'calendar': 'Your video review schedule'
     };
-    return subtitles[this.activeTab] || '';
+    return subtitles[this.currentView] || '';
   }
 },
 methods: {
@@ -77,7 +85,6 @@ methods: {
     if ('Notification' in window && Notification.permission === 'granted') {
       notificationManager.scheduleDailyCheck();
       notificationManager.setupBackgroundSync();
-      // The check on startup is now handled in scheduleDailyCheck
     }
     
     if ('serviceWorker' in navigator) {
@@ -89,21 +96,27 @@ methods: {
     }
   }
 },
-// --- THE FIX IS HERE ---
-// Add the 'async' keyword to the mounted hook
 async mounted() {
-  // Await the loading of videos from IndexedDB
+  // iOS FIX: Await the loading of videos from IndexedDB
   await videoStore.loadVideos();
-  this.initializeNotifications();
+  
+  // Register service worker (will fail on StackBlitz, works in production)
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+    } catch (error) {
+      console.log('Service Worker not available (expected on StackBlitz)');
+    }
+  }
   
   // Then initialize notifications
   this.initializeNotifications();
 }
-}
+};
 </script>
 
 <style scoped>
-/* All styles from the last stable version remain the same */
 #app {
 height: 100vh;
 display: flex;

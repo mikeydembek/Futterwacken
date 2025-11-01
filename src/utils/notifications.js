@@ -1,143 +1,264 @@
-// Notification system for video reminders
 class NotificationManager {
   constructor() {
-    this.permission = Notification.permission || 'default';
-    this.checkInterval = null;
-    // Bind methods
-    Object.getOwnPropertyNames(Object.getPrototypeOf(this))
-      .filter(prop => prop !== 'constructor' && typeof this[prop] === 'function')
-      .forEach(prop => this[prop] = this[prop].bind(this));
+    this.permission = 'default';
+    if (typeof Notification !== 'undefined') {
+      this.permission = Notification.permission;
+    }
+    this.settings = this.loadSettings();
+    this.dailyCheckInterval = null;
+  }
+
+  // Load settings from localStorage
+  loadSettings() {
+    const stored = localStorage.getItem('notificationSettings');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error('Failed to parse notification settings:', e);
+      }
+    }
+    // Default settings
+    return {
+      enabled: true,
+      time: '09:00',
+      sound: true,
+      vibrate: true
+    };
+  }
+
+  // Save settings to localStorage
+  saveSettings(settings) {
+    this.settings = { ...this.settings, ...settings };
+    localStorage.setItem('notificationSettings', JSON.stringify(this.settings));
+  }
+
+  // Get current settings
+  getSettings() {
+    return this.settings;
   }
 
   // Request notification permission
   async requestPermission() {
-    if (!('Notification' in window)) {
-      console.log('This browser does not support notifications');
-      return false;
+    if (typeof Notification === 'undefined') {
+      console.log('Notifications not supported');
+      return 'denied';
     }
+
     try {
       const permission = await Notification.requestPermission();
       this.permission = permission;
-
-      if (permission === 'granted') {
-        this.showNotification('Notifications Enabled', {
-          body: "You'll now receive background reminders.",
-          requireInteraction: false
-        });
-        
-        if ('serviceWorker' in navigator) {
-          const registration = await navigator.serviceWorker.ready;
-          if (registration && 'periodicSync' in registration) {
-            const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
-            if (status.state === 'granted') {
-              await registration.periodicSync.register('check-reminders-daily', {
-                minInterval: 12 * 60 * 60 * 1000,
-              });
-              console.log('Periodic background sync registered.');
-            }
-          } else {
-            console.log('Periodic background sync is not supported.');
-          }
-        }
-        return true;
-      }
-      return false;
+      console.log('Notification permission:', permission);
+      return permission;
     } catch (error) {
       console.error('Error requesting notification permission:', error);
-      return false;
+      return 'denied';
+    }
+  }
+
+  // Schedule daily check for notifications
+  scheduleDailyCheck() {
+    // Clear any existing interval
+    if (this.dailyCheckInterval) {
+      clearInterval(this.dailyCheckInterval);
+    }
+
+    // Check if notifications are enabled and permitted
+    if (!this.settings.enabled || this.permission !== 'granted') {
+      console.log('Daily check not scheduled - notifications disabled or not permitted');
+      return;
+    }
+
+    // Check immediately on startup
+    this.checkForNotifications();
+
+    // Then check every hour to see if it's time for the daily notification
+    this.dailyCheckInterval = setInterval(() => {
+      this.checkNotificationTime();
+    }, 60 * 60 * 1000); // Check every hour
+
+    console.log('Daily notification check scheduled');
+  }
+
+  // Check if it's time to show notification
+  checkNotificationTime() {
+    if (!this.settings.enabled || this.permission !== 'granted') {
+      return;
+    }
+
+    const now = new Date();
+    const [hours, minutes] = this.settings.time.split(':').map(Number);
+    
+    // Check if we're within the notification hour
+    if (now.getHours() === hours) {
+      const lastCheck = localStorage.getItem('lastNotificationDate');
+      const today = new Date().toDateString();
+      
+      // Only notify once per day
+      if (lastCheck !== today) {
+        this.checkForNotifications();
+        localStorage.setItem('lastNotificationDate', today);
+      }
+    }
+  }
+
+  // Check for pending reminders and show notification
+  async checkForNotifications() {
+    try {
+      // Dynamically import to avoid circular dependency
+      const { videoStore } = await import('../stores/videoStore');
+      
+      // Make sure videos are loaded
+      if (!videoStore.videos || videoStore.videos.length === 0) {
+        await videoStore.loadVideos();
+      }
+      
+      const todaysReminders = videoStore.getTodaysReminders();
+      const pendingReminders = todaysReminders.filter(video => {
+        const today = new Date().toDateString();
+        const todayReminder = video.reminders && video.reminders.find(
+          r => r.date === today
+        );
+        return todayReminder && !todayReminder.watched;
+      });
+
+      if (pendingReminders.length > 0 && this.permission === 'granted') {
+        this.showNotification(
+          'Futterwacken Reminder',
+          `You have ${pendingReminders.length} video${pendingReminders.length > 1 ? 's' : ''} to review today!`
+        );
+      }
+    } catch (error) {
+      console.error('Error checking for notifications:', error);
     }
   }
 
   // Show a notification
-  showNotification(title, options = {}) {
-    if (this.permission !== 'granted') return;
+  showNotification(title, body, options = {}) {
+    if (this.permission !== 'granted') {
+      console.log('Cannot show notification - permission not granted');
+      return null;
+    }
+
     const defaultOptions = {
-      icon: '/notification-icon.png', badge: '/notification-icon.png',
-      vibrate: [200, 100, 200], tag: 'video-reminder',
-      requireInteraction: true,
-      actions: [{ action: 'open', title: 'Open App' }, { action: 'later', title: 'Remind Later' }]
+      body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: 'futterwacken-notification',
+      requireInteraction: false,
+      silent: !this.settings.sound,
+      vibrate: this.settings.vibrate ? [200, 100, 200] : undefined
     };
-    const notificationOptions = { ...defaultOptions, ...options };
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then(reg => reg.showNotification(title, notificationOptions));
-    } else {
-      new Notification(title, notificationOptions);
+
+    const notification = new Notification(title, { ...defaultOptions, ...options });
+
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+    };
+
+    return notification;
+  }
+
+  // Test notification
+  async testNotification() {
+    if (this.permission !== 'granted') {
+      const permission = await this.requestPermission();
+      if (permission !== 'granted') {
+        return false;
+      }
     }
-  }
 
-  // Check for notifications
-  checkForNotifications() {
-    const settings = this.getSettings();
-    const [hour, minute] = settings.time.split(':').map(Number);
-    const now = new Date();
-    if (now.getHours() !== hour || now.getMinutes() !== minute) return;
-
-    const lastCheck = localStorage.getItem('lastNotificationCheck');
-    if (lastCheck && this.isSameDay(now, new Date(lastCheck))) return;
-
-    const videos = JSON.parse(localStorage.getItem('videos') || '[]');
-    const pending = this.getTodaysReminders(videos).filter(r => !r.currentReminder.completed);
-
-    if (pending.length > 0) {
-      const title = `${pending.length} Video${pending.length > 1 ? 's' : ''} to Review`;
-      const body = pending.slice(0, 3).map(r => r.title).join('\n');
-      this.showNotification(title, { body });
+    try {
+      this.showNotification(
+        'Test Notification',
+        'Notifications are working correctly!',
+        { tag: 'test-notification' }
+      );
+      return true;
+    } catch (error) {
+      console.error('Error showing test notification:', error);
+      return false;
     }
-    localStorage.setItem('lastNotificationCheck', now.toISOString());
-  }
-
-  // Get today's reminders
-  getTodaysReminders(videos) {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const reminders = [];
-    videos.forEach(video => {
-      if (!video.isActive) return;
-      video.reminders?.forEach(reminder => {
-        const rDate = new Date(reminder.date); rDate.setHours(0, 0, 0, 0);
-        if (rDate.getTime() === today.getTime()) {
-          reminders.push({ ...video, currentReminder: reminder });
-        }
-      });
-    });
-    return reminders;
-  }
-
-  // Schedule daily check
-  scheduleDailyCheck() {
-    if (this.checkInterval) clearInterval(this.checkInterval);
-    const check = () => this.checkForNotifications();
-    check(); // Initial check
-    this.checkInterval = setInterval(check, 60000);
   }
 
   // Setup background sync
   async setupBackgroundSync() {
-    if (!('serviceWorker' in navigator) || !('SyncManager' in window)) return;
-    const reg = await navigator.serviceWorker.ready;
-    await reg.sync.register('check-reminders');
-    console.log('Background sync registered');
+    if (!('serviceWorker' in navigator)) {
+      console.log('Service Worker not supported');
+      return false;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      
+      // Check if periodic background sync is supported
+      if ('periodicSync' in registration) {
+        try {
+          const status = await navigator.permissions.query({
+            name: 'periodic-background-sync'
+          });
+          
+          if (status.state === 'granted') {
+            await registration.periodicSync.register('check-reminders-daily', {
+              minInterval: 12 * 60 * 60 * 1000 // 12 hours
+            });
+            console.log('Periodic background sync registered');
+            return true;
+          } else {
+            console.log('Periodic background sync permission not granted');
+          }
+        } catch (permError) {
+          console.log('Periodic background sync not available:', permError.message);
+        }
+      } else {
+        console.log('Periodic background sync not supported');
+        
+        // Fallback: use regular sync if available
+        if ('sync' in registration) {
+          await registration.sync.register('check-reminders');
+          console.log('One-time background sync registered');
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error('Error setting up background sync:', error);
+    }
+    
+    return false;
   }
 
-  // Helper
-  isSameDay(d1, d2) {
-    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  // Get permission status
+  getPermissionStatus() {
+    return this.permission;
   }
 
-  // Settings
-  getSettings() {
-    const s = localStorage.getItem('notificationSettings');
-    return s ? JSON.parse(s) : { enabled: true, time: '09:00', sound: true, vibrate: true };
-  }
-  saveSettings(s) {
-    localStorage.setItem('notificationSettings', JSON.stringify(s));
+  // Update permission status
+  async updatePermissionStatus() {
+    if (typeof Notification !== 'undefined') {
+      this.permission = Notification.permission;
+    }
+    return this.permission;
   }
 
-  // Test
-  testNotification() {
-    this.showNotification('Test Notification', {
-      body: 'Notifications are working!', requireInteraction: false
-    });
+  // Clean up
+  destroy() {
+    if (this.dailyCheckInterval) {
+      clearInterval(this.dailyCheckInterval);
+      this.dailyCheckInterval = null;
+    }
   }
 }
 
-export const notificationManager = new NotificationManager();
+// Create a singleton instance
+const notificationManager = new NotificationManager();
+
+// Export the manager instance and methods
+export { notificationManager };
+
+// Also export individual functions for backward compatibility
+export const requestNotificationPermission = () => notificationManager.requestPermission();
+export const scheduleBackgroundSync = () => notificationManager.setupBackgroundSync();
+export const testNotification = () => notificationManager.testNotification();
+export const getNotificationPermission = () => notificationManager.getPermissionStatus();
+export const updateNotificationPermission = () => notificationManager.updatePermissionStatus();

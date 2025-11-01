@@ -98,7 +98,7 @@
 </template>
 
 <script>
-import { videoFileStorage } from '../utils/videoStorage'
+import { videoFileStorage } from '../utils/videoStorage';
 
 export default {
 name: 'VideoPlayer',
@@ -121,203 +121,203 @@ data() {
     isLoadingVideo: false,
     retryCount: 0,
     handleFullscreenChange: null
-  }
+  };
 },
 computed: {
   isDirectVideo() {
-    if (!this.video) return false
-    if (this.video.isFileUpload) return true
-    if (this.video.localFile) return true
+    if (!this.video) return false;
+    if (this.video.isFileUpload) return true;
+    if (this.video.localFile) return true;
     
-    const videoExtensions = ['.mp4', '.webm', '.ogg', '.ogv', '.mov', '.avi', '.mkv', '.m4v', '.3gp', '.wmv', '.flv']
-    const url = (this.video.url || '').toLowerCase()
-    return videoExtensions.some(ext => url.includes(ext))
+    const videoExtensions = ['.mp4', '.webm', '.ogg', '.ogv', '.mov', '.avi', '.mkv', '.m4v', '.3gp', '.wmv', '.flv'];
+    const url = (this.video.url || '').toLowerCase();
+    return videoExtensions.some(ext => url.includes(ext));
   },
   
   isYouTube() {
-    if (!this.video) return false
-    const url = this.video.url || ''
-    return url.includes('youtube.com') || url.includes('youtu.be')
+    if (!this.video) return false;
+    const url = this.video.url || '';
+    return url.includes('youtube.com') || url.includes('youtu.be');
   },
   
   youtubeEmbedUrl() {
-    if (!this.isYouTube || !this.video) return ''
+    if (!this.isYouTube || !this.video) return '';
     
-    const url = this.video.url
-    let videoId = ''
+    const url = this.video.url;
+    let videoId = '';
     
     if (url.includes('youtube.com/watch')) {
-      const urlParams = new URLSearchParams(new URL(url).search)
-      videoId = urlParams.get('v')
+      const urlParams = new URLSearchParams(new URL(url).search);
+      videoId = urlParams.get('v');
     } else if (url.includes('youtu.be/')) {
-      videoId = url.split('youtu.be/')[1].split('?')[0]
+      videoId = url.split('youtu.be/')[1].split('?')[0];
     } else if (url.includes('youtube.com/embed/')) {
-      videoId = url.split('embed/')[1].split('?')[0]
+      videoId = url.split('embed/')[1].split('?')[0];
     }
     
-    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : ''
+    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : '';
   },
   
   videoSrc() {
     if (this.actualVideoUrl) {
-      return this.actualVideoUrl
+      return this.actualVideoUrl;
     }
     
     if (this.video && !this.video.isFileUpload && !this.video.localFile) {
-      return this.video.url || ''
+      return this.video.url || '';
     }
     
-    return ''
+    return '';
   }
 },
 methods: {
   async loadVideoFile() {
     if (!this.video) {
-      this.actualVideoUrl = ''
-      return
+      this.actualVideoUrl = '';
+      return;
     }
 
     if (!this.video.isFileUpload) {
-      this.actualVideoUrl = this.video.url || ''
-      return
+      this.actualVideoUrl = this.video.url || '';
+      return;
     }
 
-    this.isLoadingVideo = true
-    this.videoError = false
-    this.errorMessage = ''
+    this.isLoadingVideo = true;
+    this.videoError = false;
+    this.errorMessage = '';
     
-    console.log('Loading video file for ID:', this.video.id)
+    console.log('Loading video file for ID:', this.video.id);
     
     try {
-      const storedUrl = await videoFileStorage.getVideoUrl(this.video.id)
+      const storedUrl = await videoFileStorage.getVideoUrl(this.video.id);
       
       if (storedUrl) {
-        console.log('Successfully loaded video from IndexedDB')
-        this.actualVideoUrl = storedUrl
-        this.videoError = false
+        console.log('Successfully loaded video from IndexedDB');
+        this.actualVideoUrl = storedUrl;
+        this.videoError = false;
       } else {
-        console.log('Video not found in IndexedDB, trying original URL')
+        console.log('Video not found in IndexedDB, trying original URL');
         
         if (this.video.url && this.video.url.startsWith('blob:')) {
-          this.videoError = true
-          this.errorMessage = 'Video file not found. It may have been deleted or the session has expired.'
+          this.videoError = true;
+          this.errorMessage = 'Video file not found. It may have been deleted or the session has expired.';
         } else {
-          this.actualVideoUrl = this.video.url
+          this.actualVideoUrl = this.video.url;
         }
       }
     } catch (error) {
-      console.error('Error loading video file:', error)
-      this.videoError = true
-      this.errorMessage = 'Failed to load video file. Please try again.'
+      console.error('Error loading video file:', error);
+      this.videoError = true;
+      this.errorMessage = 'Failed to load video file. Please try again.';
       
       if (this.video.url && !this.video.url.startsWith('blob:')) {
-        this.actualVideoUrl = this.video.url
-        this.videoError = false
+        this.actualVideoUrl = this.video.url;
+        this.videoError = false;
       }
     } finally {
-      this.isLoadingVideo = false
+      this.isLoadingVideo = false;
     }
   },
   
   async retryLoad() {
-    this.retryCount++
-    this.videoError = false
-    this.errorMessage = ''
+    this.retryCount++;
+    this.videoError = false;
+    this.errorMessage = '';
     
     if (this.retryCount > 3) {
-      this.errorMessage = 'Maximum retry attempts reached. Please re-upload the video.'
-      this.videoError = true
-      return
+      this.errorMessage = 'Maximum retry attempts reached. Please re-upload the video.';
+      this.videoError = true;
+      return;
     }
     
-    await this.loadVideoFile()
+    await this.loadVideoFile();
   },
   
   close() {
-    this.$emit('close')
+    this.$emit('close');
     
     if (this.isFullscreen && (document.fullscreenElement || document.webkitFullscreenElement)) {
       try {
-        this.exitFullscreen()
+        this.exitFullscreen();
       } catch (error) {
-        console.log('Could not exit fullscreen on close:', error)
+        console.log('Could not exit fullscreen on close:', error);
       }
     }
     
     if (this.actualVideoUrl && this.actualVideoUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(this.actualVideoUrl)
+      URL.revokeObjectURL(this.actualVideoUrl);
     }
     
-    this.actualVideoUrl = null
-    this.videoError = false
-    this.errorMessage = ''
-    this.retryCount = 0
-    this.isFullscreen = false
+    this.actualVideoUrl = null;
+    this.videoError = false;
+    this.errorMessage = '';
+    this.retryCount = 0;
+    this.isFullscreen = false;
   },
   
   closeOnBackdrop(e) {
     if (e.target.classList.contains('video-modal')) {
-      this.close()
+      this.close();
     }
   },
   
   markWatchedAndClose() {
-    this.$emit('mark-watched')
-    this.close()
+    this.$emit('mark-watched');
+    this.close();
   },
   
   async toggleFullscreen() {
-    if (!this.$refs.videoElement) return
+    if (!this.$refs.videoElement) return;
     
     try {
       if (!this.isFullscreen) {
-        const elem = this.$refs.videoElement
+        const elem = this.$refs.videoElement;
         if (elem.requestFullscreen) {
-          await elem.requestFullscreen()
+          await elem.requestFullscreen();
         } else if (elem.webkitRequestFullscreen) {
-          await elem.webkitRequestFullscreen()
+          await elem.webkitRequestFullscreen();
         } else if (elem.webkitEnterFullscreen) {
-          await elem.webkitEnterFullscreen()
+          await elem.webkitEnterFullscreen();
         } else if (elem.mozRequestFullScreen) {
-          await elem.mozRequestFullScreen()
+          await elem.mozRequestFullScreen();
         } else if (elem.msRequestFullscreen) {
-          await elem.msRequestFullscreen()
+          await elem.msRequestFullscreen();
         }
-        this.isFullscreen = true
+        this.isFullscreen = true;
       } else {
-        this.exitFullscreen()
+        this.exitFullscreen();
       }
     } catch (error) {
-      console.error('Fullscreen error:', error)
+      console.error('Fullscreen error:', error);
       if (this.$refs.videoElement && this.$refs.videoElement.webkitEnterFullscreen) {
-        this.$refs.videoElement.webkitEnterFullscreen()
+        this.$refs.videoElement.webkitEnterFullscreen();
       }
     }
   },
   
   exitFullscreen() {
     if (document.exitFullscreen) {
-      document.exitFullscreen()
+      document.exitFullscreen();
     } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen()
+      document.webkitExitFullscreen();
     } else if (document.webkitCancelFullScreen) {
-      document.webkitCancelFullScreen()
+      document.webkitCancelFullScreen();
     } else if (document.mozCancelFullScreen) {
-      document.mozCancelFullScreen()
+      document.mozCancelFullScreen();
     } else if (document.msExitFullscreen) {
-      document.msExitFullscreen()
+      document.msExitFullscreen();
     }
-    this.isFullscreen = false
+    this.isFullscreen = false;
   },
   
   handleVideoLoaded() {
-    console.log('Video loaded successfully')
-    this.videoError = false
-    this.errorMessage = ''
+    console.log('Video loaded successfully');
+    this.videoError = false;
+    this.errorMessage = '';
   },
   
   handleVideoError(e) {
-    console.error('Video playback error:', e)
+    console.error('Video playback error:', e);
     
     if (this.video && this.video.isFileUpload) {
       console.error('Uploaded file playback error:', {
@@ -325,40 +325,40 @@ methods: {
         fileType: this.video.fileType,
         fileSize: this.video.fileSize,
         url: this.videoSrc
-      })
+      });
       
-      this.errorMessage = `Unable to play ${this.video.fileName}. The file may be corrupted or in an unsupported format.`
+      this.errorMessage = `Unable to play ${this.video.fileName}. The file may be corrupted or in an unsupported format.`;
     } else {
-      this.errorMessage = 'Unable to play this video. Please check the URL or try again.'
+      this.errorMessage = 'Unable to play this video. Please check the URL or try again.';
     }
     
-    this.videoError = true
+    this.videoError = true;
   },
   
   formatFileSize(bytes) {
-    if (!bytes) return ''
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+    if (!bytes) return '';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   }
 },
 watch: {
   isOpen: {
     async handler(newVal) {
       if (newVal && this.video) {
-        document.body.style.overflow = 'hidden'
-        await this.loadVideoFile()
+        document.body.style.overflow = 'hidden';
+        await this.loadVideoFile();
       } else {
-        document.body.style.overflow = ''
+        document.body.style.overflow = '';
         
         if (this.actualVideoUrl && this.actualVideoUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(this.actualVideoUrl)
+          URL.revokeObjectURL(this.actualVideoUrl);
         }
-        this.actualVideoUrl = null
-        this.videoError = false
-        this.errorMessage = ''
-        this.retryCount = 0
+        this.actualVideoUrl = null;
+        this.videoError = false;
+        this.errorMessage = '';
+        this.retryCount = 0;
       }
     },
     immediate: true
@@ -366,37 +366,37 @@ watch: {
 },
 mounted() {
   this.handleFullscreenChange = () => {
-    this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement)
-  }
+    this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  };
   
-  document.addEventListener('fullscreenchange', this.handleFullscreenChange)
-  document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange)
+  document.addEventListener('fullscreenchange', this.handleFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange);
 },
 beforeUnmount() {
-  document.body.style.overflow = ''
+  document.body.style.overflow = '';
   
   if (document.fullscreenElement || document.webkitFullscreenElement) {
     try {
       if (document.exitFullscreen) {
-        document.exitFullscreen()
+        document.exitFullscreen();
       } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen()
+        document.webkitExitFullscreen();
       }
     } catch (error) {
-      console.log('Could not exit fullscreen:', error)
+      console.log('Could not exit fullscreen:', error);
     }
   }
   
   if (this.actualVideoUrl && this.actualVideoUrl.startsWith('blob:')) {
-    URL.revokeObjectURL(this.actualVideoUrl)
+    URL.revokeObjectURL(this.actualVideoUrl);
   }
   
   if (this.handleFullscreenChange) {
-    document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
-    document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange)
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
+    document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange);
   }
 }
-}
+};
 </script>
 
 <style scoped>
@@ -455,6 +455,7 @@ margin: 0;
 font-size: 18px;
 flex: 1;
 margin-right: var(--space-md);
+color: var(--text-primary);
 }
 
 .close-btn {
