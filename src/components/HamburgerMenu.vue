@@ -127,6 +127,8 @@ justify-content: center;
 gap: 4px;
 transition: all 0.3s ease;
 z-index: 1002;
+/* ADDED: Shadow hovering effect like the cards */
+box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
 }
 .hamburger-button:active { transform: scale(0.95); }
 .hamburger-button.active { background: var(--accent-primary); }

@@ -99,49 +99,17 @@
           class="reminder-card card-completed"
         >
           <div class="card-main">
-            <!-- Left: Replay -->
+            <!-- Left: Replay - CHANGED TO USE PNG IMAGE -->
             <button
               class="replay-btn"
               @click="openVideoPlayer(reminder)"
               aria-label="Replay video"
             >
-              <svg class="icon-replay" viewBox="0 0 24 24" aria-hidden="true">
-                 <!-- Replay icon: circular arrow, accent blue -->
-                <path
-                  d="M3 12a9 9 0 0 1 15.5 -6"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <polyline
-                  points="18 3 18 9 12 9"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-
-                <!-- Bottom-right to left arc + arrow -->
-                <path
-                  d="M21 12a9 9 0 0 1 -15.5 6"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <polyline
-                  points="6 21 6 15 12 15"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
+              <img 
+                src="/icons/img/icon-replay.png" 
+                alt="Replay" 
+                class="icon-replay-img"
+              />
             </button>
 
             <!-- Center: Title + Info -->
@@ -296,13 +264,16 @@ letter-spacing: 0.2px;
 display: flex;
 align-items: center;
 justify-content: center;
-border: none;
-box-shadow: none;
+/* UPDATED: Added thin light gray border */
+border: 1px solid #9CA3AF;
+/* UPDATED: Added shadow hovering effect */
+box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
 }
 
 /* Backgrounds per spec */
 .badge-total { background: var(--bg-tertiary); }
-.badge-completed { background: #6B7280; }
+/* UPDATED: Brighter color for completed badge */
+.badge-completed { background: #9CA3AF; }
 .badge-pending { background: var(--accent-primary); }
 
 /* Sections */
@@ -411,6 +382,13 @@ stroke-linejoin: round;
 stroke-linecap: round;
 }
 .icon-replay path { stroke: currentColor; }
+
+/* PNG Replay icon */
+.icon-replay-img {
+width: 38px;
+height: 38px;
+display: block;
+}
 
 /* Title */
 .video-title {

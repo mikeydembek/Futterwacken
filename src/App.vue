@@ -1,4 +1,5 @@
 <template>
+<!-- TEMPLATE REMAINS EXACTLY THE SAME -->
 <div id="app">
   <!-- Header -->
   <header class="global-header">
@@ -26,6 +27,7 @@
 </template>
 
 <script>
+// SCRIPT REMAINS EXACTLY THE SAME
 // Imports
 import TabBar from './components/TabBar.vue';
 import HamburgerMenu from './components/HamburgerMenu.vue';
@@ -132,7 +134,7 @@ background: linear-gradient(
 
 .global-header {
 padding: var(--space-md);
-background: transparent; 
+background: #1F2937; /* CHANGED: From transparent to match app background */
 border-bottom: none;
 position: sticky;
 top: 0;
