@@ -1,4 +1,5 @@
 <template>
+<!-- Template remains exactly the same as before -->
 <div class="add-view">
   <!-- This wrapper is now centered vertically -->
   <div class="content-wrapper">
@@ -205,16 +206,19 @@ methods: {
         fileName: this.selectedFile ? this.selectedFile.name : null,
         fileSize: this.selectedFile ? this.selectedFile.size : null,
         fileType: this.selectedFile ? this.selectedFile.type : null,
-        dateAdded: new Date().toISOString()
+        dateAdded: new Date().toISOString(),
+        hasFile: this.modalMode === 'file' // Add this flag
       };
 
+      // If it's a file upload, save the file to IndexedDB first
       if (this.selectedFile) {
         await videoFileStorage.saveVideoFile(id, this.selectedFile);
-        videoData.url = URL.createObjectURL(this.selectedFile);
+        // Don't store blob URL in the metadata - it will be created on demand
         videoData.localFile = true;
       }
 
-      videoStore.addVideo(videoData);
+      // Add video to store (without blob URL)
+      await videoStore.addVideo(videoData);
 
       this.successMessage = 'Saved!';
       this.loadRecent();
@@ -222,8 +226,8 @@ methods: {
       this.showModal = false;
       setTimeout(() => (this.successMessage = ''), 1200);
     } catch (e) {
-      console.error(e);
-      this.errorMessage = 'Failed to save video';
+      console.error('Error saving video:', e);
+      this.errorMessage = 'Failed to save video: ' + e.message;
     }
   },
   resetForm() {
@@ -234,7 +238,7 @@ methods: {
     if (this.$refs.fileInput) this.$refs.fileInput.value = '';
   },
   loadRecent() {
-    this.recentVideos = (videoStore.videos || []).slice(0, 3);
+    this.recentVideos = (videoStore.videos || []).slice(-3).reverse();
   },
   timeAgo(iso) {
     if (!iso) return '';
@@ -253,15 +257,14 @@ mounted() {
 </script>
 
 <style scoped>
+/* All styles remain exactly the same */
 .add-view {
 height: 100%;
 overflow-y: auto;
 padding-bottom: 80px;
 padding-inline: var(--space-md);
 padding-top: var(--space-md);
-/* New, darker gray background */
 background: #1F2937;
-
 display: grid;
 place-items: center;
 }
@@ -271,13 +274,13 @@ width: 100%;
 max-width: 500px;
 }
 
-/* Actions cards (pill-like) */
 .actions {
 display: flex;
 flex-direction: column;
 gap: var(--space-md);
 margin-bottom: var(--space-lg);
 }
+
 .action-card {
 width: 100%;
 border-radius: 48px;
@@ -291,43 +294,46 @@ padding: 16px;
 text-align: left;
 transition: transform .1s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
 cursor: pointer;
-/* New shadow to create a "hovering" effect */
 box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
 }
+
 .action-card:active { transform: scale(0.98); }
+
 .action-card.url {
 background: var(--accent-primary);
 border: 1px solid var(--accent-primary);
 color: #fff;
 }
+
 .action-card.device {
 background: var(--bg-secondary);
 color: var(--text-primary);
 }
 
-/* Labels (no icon, centered) */
 .label-group {
 display: flex;
 flex-direction: column;
 align-items: center;
 gap: 2px;
 }
+
 .action-title {
 font-size: 16px;
 font-weight: 600;
 text-align: center;
 }
 
-/* Recent */
 .recent-section {
 margin-top: var(--space-lg);
 }
+
 .separator {
 width: 100%;
 height: 1px;
 background: #6B7280;
 margin-block: var(--space-lg);
 }
+
 .recent-title {
 font-size: 14px;
 font-weight: 600;
@@ -335,6 +341,7 @@ color: #ffffff;
 text-align: left;
 margin-bottom: var(--space-sm);
 }
+
 .recent-card {
 border-radius: 16px;
 border: 1px solid #6B7280;
@@ -342,32 +349,38 @@ background: var(--bg-secondary);
 padding: var(--space-md);
 margin-bottom: var(--space-sm);
 }
+
 .item-center {
 display: flex;
 flex-direction: column;
 align-items: center;
 gap: 2px;
 }
+
 .item-title {
 font-size: 14px;
 font-weight: 600;
 text-align: center;
 color: var(--text-primary);
 }
+
 .mini-info {
 display: flex;
 align-items: center;
 gap: 8px;
 }
+
 .mini-badge {
 font-size: 10px;
 color: var(--accent-primary);
 font-weight: 600;
 }
+
 .meta-pill.small {
 font-size: 10px;
 background: var(--bg-primary);
 }
+
 .meta-pill {
 display: inline-flex;
 align-items: center;
@@ -378,51 +391,79 @@ font-size: 12px;
 color: var(--text-secondary);
 background: var(--bg-tertiary);
 }
-.meta-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+.meta-dot { 
+width: 6px; 
+height: 6px; 
+border-radius: 50%; 
+display: inline-block; 
+}
+
 .dot-file { background: var(--text-secondary); }
 .dot-link { background: var(--accent-primary); }
 
-/* Modal */
 .modal-overlay {
-position: fixed; inset: 0;
+position: fixed; 
+inset: 0;
 background: rgba(0,0,0,0.75);
-display: grid; place-items: center;
+display: grid; 
+place-items: center;
 z-index: 1000;
 padding: var(--space-md);
 }
+
 .modal-content {
-width: 100%; max-width: 520px;
+width: 100%; 
+max-width: 520px;
 border-radius: 32px;
 border: 1px solid var(--bg-tertiary);
 background: var(--bg-secondary);
 padding: var(--space-md);
 }
+
 .modal-header {
 display: grid;
 grid-template-columns: 1fr auto;
 align-items: center;
 }
+
 .modal-title {
 text-align: center;
 font-size: 16px;
 font-weight: 600;
 color: var(--text-primary);
 }
+
 .modal-close {
-width: 36px; height: 36px;
+width: 36px; 
+height: 36px;
 border-radius: 9999px;
 background: var(--bg-tertiary);
-border: none; color: var(--text-primary);
-display: grid; place-items: center;
+border: none; 
+color: var(--text-primary);
+display: grid; 
+place-items: center;
 cursor: pointer;
 }
+
 .modal-body {
 margin-top: var(--space-md);
-display: flex; flex-direction: column;
+display: flex; 
+flex-direction: column;
 gap: var(--space-md);
 }
-.form-row { display: flex; flex-direction: column; gap: 6px; }
-.label { font-size: 12px; color: var(--text-secondary); }
+
+.form-row { 
+display: flex; 
+flex-direction: column; 
+gap: 6px; 
+}
+
+.label { 
+font-size: 12px; 
+color: var(--text-secondary); 
+}
+
 .input {
 width: 100%;
 height: 44px;
@@ -433,7 +474,12 @@ color: var(--text-primary);
 padding: 0 var(--space-md);
 font-size: 14px;
 }
-.input:focus { border-color: var(--accent-primary); outline: none; }
+
+.input:focus { 
+border-color: var(--accent-primary); 
+outline: none; 
+}
+
 .textarea {
 height: auto;
 padding-top: var(--space-sm);
@@ -441,13 +487,25 @@ padding-bottom: var(--space-sm);
 border-radius: 16px;
 resize: vertical;
 }
-.file-row { display: flex; align-items: center; gap: var(--space-sm); }
-.file-name { font-size: 12px; color: var(--text-secondary); }
+
+.file-row { 
+display: flex; 
+align-items: center; 
+gap: var(--space-sm); 
+}
+
+.file-name { 
+font-size: 12px; 
+color: var(--text-secondary); 
+}
 
 .modal-actions {
 margin-top: var(--space-md);
-display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm);
+display: grid; 
+grid-template-columns: 1fr 1fr; 
+gap: var(--space-sm);
 }
+
 .w-full { width: 100%; }
 
 .error {
@@ -459,10 +517,10 @@ border-radius: 12px;
 font-size: 12px;
 }
 
-/* Toast */
 .success-toast {
 position: fixed;
-bottom: 100px; left: 50%;
+bottom: 100px; 
+left: 50%;
 transform: translateX(-50%);
 padding: var(--space-sm) var(--space-md);
 background: var(--bg-secondary);
@@ -471,5 +529,10 @@ color: var(--accent-success);
 border-radius: 16px;
 z-index: 1001;
 }
-.hidden-file-input { position: absolute; left: -9999px; opacity: 0; }
+
+.hidden-file-input { 
+position: absolute; 
+left: -9999px; 
+opacity: 0; 
+}
 </style>
