@@ -44,36 +44,182 @@
 </template>
 
 <script>
-// Script remains the same
-import { videoStore } from '../stores/videoStore'
+import { videoStore } from '../stores/videoStore';
+import { videoFileStorage } from '../utils/videoStorage';
 
 export default {
 name: 'DataManagement',
-// ... (rest of the script)
 data() {
   return {
     message: '',
-    messageType: ''
-  }
+    messageType: '' // 'success' | 'error'
+  };
 },
 methods: {
+  // Create a timestamped backup filename
+  buildFilename() {
+    const d = new Date();
+    const pad = function(n) { return String(n).padStart(2, '0'); };
+    const name = 'futterwacken-backup-' +
+      d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '_' +
+      pad(d.getHours()) + '-' + pad(d.getMinutes()) + '-' + pad(d.getSeconds()) + '.json';
+    return name;
+  },
+
+  // Export only metadata (videos array) as JSON
   exportData() {
-    // ...
+    try {
+      // Use the store's exporter (returns a JSON string of the videos array)
+      const jsonStr = videoStore.exportVideos();
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = this.buildFilename();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      this.showMessage('Backup exported successfully.', 'success');
+    } catch (e) {
+      console.error('Export failed:', e);
+      this.showMessage('Export failed. Please try again.', 'error');
+    }
   },
+
   triggerImport() {
-    // ...
+    if (this.$refs.importInput) {
+      this.$refs.importInput.value = '';
+      this.$refs.importInput.click();
+    }
   },
+
   async importData(event) {
-    // ...
+    try {
+      const input = event && event.target ? event.target : null;
+      const file = input && input.files && input.files[0] ? input.files[0] : null;
+      if (!file) return;
+
+      if (file.type && file.type.indexOf('json') === -1 && file.name.toLowerCase().slice(-5) !== '.json') {
+        this.showMessage('Please select a valid JSON file.', 'error');
+        return;
+      }
+
+      // Read file content
+      const text = await file.text();
+
+      // We support either:
+      // 1) A raw array of videos: [ {..video..}, ... ]
+      // 2) An object with { videos: [ ... ] } for compatibility
+      var parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch (e) {
+        this.showMessage('Invalid JSON file.', 'error');
+        return;
+      }
+
+      let payloadStr = null;
+      if (Array.isArray(parsed)) {
+        payloadStr = JSON.stringify(parsed);
+      } else if (parsed && Array.isArray(parsed.videos)) {
+        payloadStr = JSON.stringify(parsed.videos);
+      } else {
+        this.showMessage('Backup does not contain a valid videos list.', 'error');
+        return;
+      }
+
+      // Import into the store (this overwrites current videos with the imported list)
+      const ok = videoStore.importVideos(payloadStr);
+      if (ok) {
+        // Ensure reactive state is up-to-date
+        await videoStore.loadVideos();
+        // Optionally sync to Service Worker (non-invasive)
+        this.maybeSyncServiceWorker();
+        this.showMessage('Backup restored successfully.', 'success');
+      } else {
+        this.showMessage('Import failed. Please check the file and try again.', 'error');
+      }
+    } catch (e) {
+      console.error('Import error:', e);
+      this.showMessage('Import failed due to an unexpected error.', 'error');
+    } finally {
+      // Reset file input
+      if (this.$refs.importInput) this.$refs.importInput.value = '';
+    }
   },
-  confirmClear() {
-    // ...
+
+  async confirmClear() {
+    const ok = window.confirm('This will permanently delete all videos and settings from this device. Continue?');
+    if (!ok) return;
+
+    try {
+      // Clear metadata
+      videoStore.clearAllData();
+      await videoStore.loadVideos();
+
+      // Also clear stored video files (IndexedDB) for a true "clear all"
+      try {
+        await videoFileStorage.clearAllVideos();
+      } catch (e) {
+        console.log('Clearing video files skipped or failed:', e && e.message);
+      }
+
+      // Optionally notify the SW that data is now empty
+      this.maybeSyncServiceWorker();
+
+      this.showMessage('All data cleared successfully.', 'success');
+    } catch (e) {
+      console.error('Clear data failed:', e);
+      this.showMessage('Failed to clear data. Please try again.', 'error');
+    }
   },
+
   showMessage(text, type) {
-    // ...
+    this.message = text;
+    this.messageType = type;
+    const self = this;
+    setTimeout(function() {
+      self.message = '';
+      self.messageType = '';
+    }, 3000);
+  },
+
+  // Non-invasive helper: if SW is active, send latest videos snapshot
+  maybeSyncServiceWorker() {
+    try {
+      if (!('serviceWorker' in navigator)) return;
+      const active = navigator.serviceWorker.controller;
+      if (!active) return;
+
+      const serializable = (videoStore.videos || []).map(function(v) {
+        return {
+          id: v.id,
+          title: v.title,
+          url: v.url || '',
+          notes: v.notes || '',
+          isFileUpload: v.isFileUpload || false,
+          fileName: v.fileName || null,
+          fileSize: v.fileSize || null,
+          fileType: v.fileType || null,
+          dateAdded: v.dateAdded,
+          reminders: v.reminders || [],
+          repeatMonthly: v.repeatMonthly || null,
+          isActive: (v.isActive !== undefined) ? v.isActive : true
+        };
+      });
+
+      active.postMessage({
+        type: 'CACHE_VIDEOS',
+        videos: JSON.parse(JSON.stringify(serializable))
+      });
+    } catch (e) {
+      console.log('SW sync skipped:', e && e.message);
+    }
   }
 }
-}
+};
 </script>
 
 <style scoped>
