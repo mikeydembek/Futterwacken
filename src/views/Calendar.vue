@@ -84,6 +84,22 @@
           <span class="status-badge" :class="getStatusClass(rem)">
             {{ getStatusText(rem) }}
           </span>
+
+          <!-- Delete button: simple trash can icon, currentColor stroke -->
+          <button
+            class="icon-btn delete-btn"
+            @click="confirmDelete(rem)"
+            aria-label="Delete video"
+            title="Delete video"
+          >
+            <svg class="trash-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -259,6 +275,19 @@ methods: {
     if (reminder.day === 'Monthly') return 'Monthly';
     const map = { 1: 'Day 1', 2: 'Day 2', 5: 'Day 5', 12: 'Day 12', 42: 'Day 42' };
     return map[reminder.day] || `Day ${reminder.day}`;
+  },
+
+  // NEW: confirm and delete the entire video (metadata + any stored file)
+  async confirmDelete(rem) {
+    const ok = window.confirm('Are you sure you want to delete this video?');
+    if (!ok) return;
+    try {
+      await videoStore.deleteVideo(rem.id);
+      // UI updates reactively via computed properties
+    } catch (e) {
+      console.error('Delete failed:', e);
+      alert('Failed to delete this video. Please try again.');
+    }
   }
 },
 mounted() {
@@ -432,7 +461,7 @@ gap: 8px;
 
 .reminder-item {
 display: grid;
-grid-template-columns: 1fr auto;
+grid-template-columns: 1fr auto auto; /* NEW: room for delete icon */
 align-items: center;
 padding: 10px;
 background: var(--bg-tertiary);
@@ -499,5 +528,39 @@ background: rgba(244, 67, 54, 0.15);
 .status-pending {
 color: var(--accent-primary);
 background: rgba(59, 130, 246, 0.15);
+}
+
+/* NEW: icon button for delete */
+.icon-btn {
+width: 32px;
+height: 32px;
+display: grid;
+place-items: center;
+background: transparent;
+border: none;
+color: var(--text-secondary);
+border-radius: var(--radius-md);
+cursor: pointer;
+transition: color .15s ease, transform .1s ease;
+}
+.icon-btn:active { transform: scale(0.96); }
+
+.delete-btn:hover,
+.delete-btn:focus-visible {
+color: var(--accent-danger);
+}
+
+/* NEW: trash icon style (stroke uses currentColor) */
+.trash-icon {
+width: 20px;
+height: 20px;
+display: block;
+}
+.trash-icon path {
+fill: none;
+stroke: currentColor;
+stroke-width: 2;
+stroke-linecap: round;
+stroke-linejoin: round;
 }
 </style>
