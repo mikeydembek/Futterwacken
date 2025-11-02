@@ -273,7 +273,7 @@ box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.
 /* Backgrounds per spec */
 .badge-total { background: var(--bg-tertiary); }
 /* UPDATED: Brighter color for completed badge */
-.badge-completed { background: rgba(0, 0,255, 100) }
+.badge-completed { background: rgba(0, 7, 255, 100) }
 .badge-pending { background: var(--accent-primary); }
 
 /* Sections */
@@ -482,5 +482,4 @@ margin-top: var(--space-md);
 /* Empty state */
 .empty-state { text-align: center; padding: var(--space-xl); }
 .empty-title { font-size: 16px; font-weight: 600; }
-
 </style>

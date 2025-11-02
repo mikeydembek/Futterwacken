@@ -41,14 +41,33 @@
         class="video-player"
       ></iframe>
 
-      <!-- Error state for failed video -->
+      <!-- Error state for failed or missing video -->
       <div v-else-if="videoError" class="video-error">
         <div class="error-icon">⚠️</div>
         <h3>Unable to play video</h3>
         <p>{{ errorMessage }}</p>
-        <button @click="retryLoad" class="btn btn-secondary">
-          🔄 Retry
-        </button>
+
+        <div class="error-actions">
+          <button @click="retryLoad" class="btn btn-secondary">
+            🔄 Retry
+          </button>
+
+          <!-- NEW: Reattach flow only for uploaded files -->
+          <button
+            v-if="video && (video.isFileUpload || video.localFile)"
+            @click="openFilePicker"
+            class="btn btn-primary"
+          >
+            📁 Locate File
+          </button>
+          <input
+            ref="filePicker"
+            type="file"
+            accept="video/*"
+            @change="reattachFile"
+            class="hidden-file-input"
+          />
+        </div>
       </div>
 
       <!-- External link fallback -->
@@ -99,6 +118,7 @@
 
 <script>
 import { videoFileStorage } from '../utils/videoStorage';
+import { videoStore } from '../stores/videoStore';
 
 export default {
 name: 'VideoPlayer',
@@ -131,31 +151,35 @@ computed: {
     
     const videoExtensions = ['.mp4', '.webm', '.ogg', '.ogv', '.mov', '.avi', '.mkv', '.m4v', '.3gp', '.wmv', '.flv'];
     const url = (this.video.url || '').toLowerCase();
-    return videoExtensions.some(ext => url.includes(ext));
+    for (var i = 0; i < videoExtensions.length; i++) {
+      if (url.indexOf(videoExtensions[i]) !== -1) return true;
+    }
+    return false;
   },
   
   isYouTube() {
     if (!this.video) return false;
     const url = this.video.url || '';
-    return url.includes('youtube.com') || url.includes('youtu.be');
+    return url.indexOf('youtube.com') !== -1 || url.indexOf('youtu.be') !== -1;
   },
   
   youtubeEmbedUrl() {
     if (!this.isYouTube || !this.video) return '';
     
     const url = this.video.url;
-    let videoId = '';
+    var videoId = '';
     
-    if (url.includes('youtube.com/watch')) {
-      const urlParams = new URLSearchParams(new URL(url).search);
+    if (url.indexOf('youtube.com/watch') !== -1) {
+      const urlObj = new URL(url);
+      const urlParams = new URLSearchParams(urlObj.search);
       videoId = urlParams.get('v');
-    } else if (url.includes('youtu.be/')) {
+    } else if (url.indexOf('youtu.be/') !== -1) {
       videoId = url.split('youtu.be/')[1].split('?')[0];
-    } else if (url.includes('youtube.com/embed/')) {
+    } else if (url.indexOf('youtube.com/embed/') !== -1) {
       videoId = url.split('embed/')[1].split('?')[0];
     }
     
-    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : '';
+    return videoId ? 'https://www.youtube.com/embed/' + videoId + '?autoplay=1&rel=0' : '';
   },
   
   videoSrc() {
@@ -177,7 +201,7 @@ methods: {
       return;
     }
 
-    if (!this.video.isFileUpload) {
+    if (!this.video.isFileUpload && !this.video.localFile) {
       this.actualVideoUrl = this.video.url || '';
       return;
     }
@@ -186,34 +210,21 @@ methods: {
     this.videoError = false;
     this.errorMessage = '';
     
-    console.log('Loading video file for ID:', this.video.id);
-    
     try {
       const storedUrl = await videoFileStorage.getVideoUrl(this.video.id);
       
       if (storedUrl) {
-        console.log('Successfully loaded video from IndexedDB');
         this.actualVideoUrl = storedUrl;
         this.videoError = false;
       } else {
-        console.log('Video not found in IndexedDB, trying original URL');
-        
-        if (this.video.url && this.video.url.startsWith('blob:')) {
-          this.videoError = true;
-          this.errorMessage = 'Video file not found. It may have been deleted or the session has expired.';
-        } else {
-          this.actualVideoUrl = this.video.url;
-        }
+        // Missing file after restore/import
+        this.videoError = true;
+        this.errorMessage = 'This uploaded video file is missing on this device. Please locate the original file to reattach it.';
       }
     } catch (error) {
       console.error('Error loading video file:', error);
       this.videoError = true;
       this.errorMessage = 'Failed to load video file. Please try again.';
-      
-      if (this.video.url && !this.video.url.startsWith('blob:')) {
-        this.actualVideoUrl = this.video.url;
-        this.videoError = false;
-      }
     } finally {
       this.isLoadingVideo = false;
     }
@@ -225,12 +236,59 @@ methods: {
     this.errorMessage = '';
     
     if (this.retryCount > 3) {
-      this.errorMessage = 'Maximum retry attempts reached. Please re-upload the video.';
+      this.errorMessage = 'Maximum retry attempts reached. Please re-upload or reattach the video.';
       this.videoError = true;
       return;
     }
     
     await this.loadVideoFile();
+  },
+
+  // NEW: open file picker to reattach missing uploaded file
+  openFilePicker() {
+    if (this.$refs.filePicker) {
+      this.$refs.filePicker.value = '';
+      this.$refs.filePicker.click();
+    }
+  },
+
+  // NEW: save selected file into IndexedDB under the same id, update metadata, then reload
+  async reattachFile(e) {
+    try {
+      const file = e && e.target && e.target.files ? e.target.files[0] : null;
+      if (!file || !this.video) return;
+
+      // Store the file in IndexedDB using the existing video id
+      await videoFileStorage.saveVideoFile(this.video.id, file);
+
+      // Update metadata for this video in the store
+      var v = videoStore.videos.find(function(x) { return x.id === (e && e.target ? (e.target.closest && e.target.closest('[data-id]') ? e.target.closest('[data-id]').dataset.id : null) : null); });
+      // Safer: just use this.video.id to find
+      for (var i = 0; i < videoStore.videos.length; i++) {
+        if (videoStore.videos[i].id === this.video.id) {
+          videoStore.videos[i].fileName = file.name;
+          videoStore.videos[i].fileSize = file.size;
+          videoStore.videos[i].fileType = file.type;
+          videoStore.videos[i].isFileUpload = true;
+          videoStore.videos[i].localFile = true;
+          videoStore.videos[i].hasFile = true;
+          break;
+        }
+      }
+      // Persist metadata
+      videoStore.saveToStorage && videoStore.saveToStorage();
+
+      // Reload the freshly saved file
+      this.videoError = false;
+      this.errorMessage = '';
+      await this.loadVideoFile();
+    } catch (err) {
+      console.error('Reattach failed:', err);
+      this.errorMessage = 'Could not attach this file. Please try again.';
+      this.videoError = true;
+    } finally {
+      if (this.$refs.filePicker) this.$refs.filePicker.value = '';
+    }
   },
   
   close() {
@@ -244,7 +302,7 @@ methods: {
       }
     }
     
-    if (this.actualVideoUrl && this.actualVideoUrl.startsWith('blob:')) {
+    if (this.actualVideoUrl && this.actualVideoUrl.indexOf('blob:') === 0) {
       URL.revokeObjectURL(this.actualVideoUrl);
     }
     
@@ -311,7 +369,6 @@ methods: {
   },
   
   handleVideoLoaded() {
-    console.log('Video loaded successfully');
     this.videoError = false;
     this.errorMessage = '';
   },
@@ -319,15 +376,8 @@ methods: {
   handleVideoError(e) {
     console.error('Video playback error:', e);
     
-    if (this.video && this.video.isFileUpload) {
-      console.error('Uploaded file playback error:', {
-        fileName: this.video.fileName,
-        fileType: this.video.fileType,
-        fileSize: this.video.fileSize,
-        url: this.videoSrc
-      });
-      
-      this.errorMessage = `Unable to play ${this.video.fileName}. The file may be corrupted or in an unsupported format.`;
+    if (this.video && (this.video.isFileUpload || this.video.localFile)) {
+      this.errorMessage = 'Unable to play this uploaded file. It may be missing on this device. Please locate the original file and reattach it.';
     } else {
       this.errorMessage = 'Unable to play this video. Please check the URL or try again.';
     }
@@ -336,7 +386,7 @@ methods: {
   },
   
   formatFileSize(bytes) {
-    if (!bytes) return '';
+    if (!bytes && bytes !== 0) return '';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -352,7 +402,7 @@ watch: {
       } else {
         document.body.style.overflow = '';
         
-        if (this.actualVideoUrl && this.actualVideoUrl.startsWith('blob:')) {
+        if (this.actualVideoUrl && this.actualVideoUrl.indexOf('blob:') === 0) {
           URL.revokeObjectURL(this.actualVideoUrl);
         }
         this.actualVideoUrl = null;
@@ -365,8 +415,9 @@ watch: {
   }
 },
 mounted() {
-  this.handleFullscreenChange = () => {
-    this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  var self = this;
+  this.handleFullscreenChange = function() {
+    self.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
   };
   
   document.addEventListener('fullscreenchange', this.handleFullscreenChange);
@@ -387,7 +438,7 @@ beforeUnmount() {
     }
   }
   
-  if (this.actualVideoUrl && this.actualVideoUrl.startsWith('blob:')) {
+  if (this.actualVideoUrl && this.actualVideoUrl.indexOf('blob:') === 0) {
     URL.revokeObjectURL(this.actualVideoUrl);
   }
   
@@ -541,6 +592,13 @@ margin-left: auto;
 margin-right: auto;
 }
 
+.error-actions {
+display: flex;
+gap: var(--space-sm);
+justify-content: center;
+flex-wrap: wrap;
+}
+
 .external-link-container {
 text-align: center;
 padding: var(--space-xl);
@@ -590,44 +648,17 @@ font-size: 12px;
 color: var(--text-secondary);
 }
 
-.modal-footer {
-padding: var(--space-md);
-border-top: 1px solid var(--bg-tertiary);
-display: flex;
-gap: var(--space-sm);
-}
-
-.modal-footer .btn {
-flex: 1;
-}
-
-@media (max-width: 768px) {
-.modal-content {
-  max-width: 100%;
-  max-height: 95vh;
-  margin: 0;
-}
-
-.video-container {
-  max-height: 40vh;
-}
-
-.modal-header h3 {
-  font-size: 16px;
-}
-}
-
-@media (orientation: landscape) and (max-height: 500px) {
-.modal-content {
-  max-height: 100vh;
-}
-
-.video-container {
-  max-height: 60vh;
-}
-
-.video-info {
-  display: none;
-}
+/* Hidden file input for reattach flow */
+.hidden-file-input {
+position: absolute;
+width: 1px;
+height: 1px;
+overflow: hidden;
+clip: rect(0 0 0 0);
+clip-path: inset(50%);
+white-space: nowrap;
+border: 0;
+padding: 0;
+margin: 0;
 }
 </style>
