@@ -106,6 +106,8 @@ async function checkAndNotify() {
     let videos = [];
     if (cachedResponse) {
       videos = await cachedResponse.json();
+    } else {
+      console.log('SW: No cached videos found at /api/videos');
     }
     
     // Check for today's pending reminders

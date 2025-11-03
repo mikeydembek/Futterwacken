@@ -8,7 +8,6 @@ class NotificationManager {
     this.dailyCheckInterval = null;
   }
 
-  // Load settings from localStorage
   loadSettings() {
     const stored = localStorage.getItem('notificationSettings');
     if (stored) {
@@ -18,7 +17,6 @@ class NotificationManager {
         console.error('Failed to parse notification settings:', e);
       }
     }
-    // Default settings
     return {
       enabled: true,
       time: '09:00',
@@ -27,19 +25,17 @@ class NotificationManager {
     };
   }
 
-  // Save settings to localStorage
   saveSettings(settings) {
     this.settings = { ...this.settings, ...settings };
     localStorage.setItem('notificationSettings', JSON.stringify(this.settings));
   }
 
-  // Get current settings
   getSettings() {
     return this.settings;
   }
 
-   // Request notification permission (supports both Promise and callback forms for iOS)
-   async requestPermission() {
+  // Request notification permission (supports both Promise and callback forms for iOS)
+  async requestPermission() {
     if (typeof Notification === 'undefined') {
       console.log('Notifications not supported');
       return 'denied';
@@ -47,18 +43,13 @@ class NotificationManager {
 
     try {
       let result = null;
-
-      // Some versions of iOS Safari implement a callback instead of a Promise.
       const maybePromise = Notification.requestPermission((permission) => {
-        // Callback form (older Safari/iOS)
         result = permission;
       });
 
       if (maybePromise && typeof maybePromise.then === 'function') {
-        // Modern browsers return a Promise
         result = await maybePromise;
       } else if (!result) {
-        // Fallback: read current state if callback didn’t fire synchronously
         result = Notification.permission;
       }
 
@@ -71,70 +62,53 @@ class NotificationManager {
     }
   }
 
-  // Schedule daily check for notifications
   scheduleDailyCheck() {
-    // Clear any existing interval
     if (this.dailyCheckInterval) {
       clearInterval(this.dailyCheckInterval);
     }
 
-    // Check if notifications are enabled and permitted
     if (!this.settings.enabled || this.permission !== 'granted') {
       console.log('Daily check not scheduled - notifications disabled or not permitted');
       return;
     }
 
-    // Sync video data to Service Worker
     this.syncVideosToServiceWorker();
-
-    // Check immediately on startup
     this.checkForNotifications();
 
-    // Then check every 30 minutes to see if it's time for the daily notification
     this.dailyCheckInterval = setInterval(() => {
       this.checkNotificationTime();
-      // Also sync data periodically
       this.syncVideosToServiceWorker();
-    }, 30 * 60 * 1000); // Check every 30 minutes
+    }, 30 * 60 * 1000);
 
     console.log('Daily notification check scheduled');
   }
 
-  // Sync videos to Service Worker for background checks
   async syncVideosToServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
-    
     try {
-      const registration = await navigator.serviceWorker.ready;
+      await navigator.serviceWorker.ready;
       const { videoStore } = await import('../stores/videoStore');
-      
-      // Create a clean, serializable copy of videos data
-      const serializableVideos = videoStore.videos.map(video => {
-        return {
-          id: video.id,
-          title: video.title,
-          url: video.url || '',
-          notes: video.notes || '',
-          isFileUpload: video.isFileUpload || false,
-          fileName: video.fileName || null,
-          fileSize: video.fileSize || null,
-          fileType: video.fileType || null,
-          dateAdded: video.dateAdded,
-          reminders: video.reminders || [],
-          repeatMonthly: video.repeatMonthly || null,
-          isActive: video.isActive !== undefined ? video.isActive : true
-        };
-      });
-      
-      // Send videos data to Service Worker to cache
-      if (registration.active) {
-        // Convert to JSON string first to ensure it's serializable
-        const message = {
+
+      const serializableVideos = videoStore.videos.map(video => ({
+        id: video.id,
+        title: video.title,
+        url: video.url || '',
+        notes: video.notes || '',
+        isFileUpload: video.isFileUpload || false,
+        fileName: video.fileName || null,
+        fileSize: video.fileSize || null,
+        fileType: video.fileType || null,
+        dateAdded: video.dateAdded,
+        reminders: video.reminders || [],
+        repeatMonthly: video.repeatMonthly || null,
+        isActive: video.isActive !== undefined ? video.isActive : true
+      }));
+
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
           type: 'CACHE_VIDEOS',
           videos: JSON.parse(JSON.stringify(serializableVideos))
-        };
-        
-        registration.active.postMessage(message);
+        });
         console.log('Synced videos to Service Worker');
       }
     } catch (error) {
@@ -142,25 +116,20 @@ class NotificationManager {
     }
   }
 
-  // Check if it's time to show notification
   checkNotificationTime() {
-    if (!this.settings.enabled || this.permission !== 'granted') {
-      return;
-    }
+    if (!this.settings.enabled || this.permission !== 'granted') return;
 
     const now = new Date();
     const [hours, minutes] = this.settings.time.split(':').map(Number);
-    
-    // Check if we're within the notification window (within 30 minutes of set time)
+
     const targetTime = new Date();
     targetTime.setHours(hours, minutes, 0, 0);
     const timeDiff = Math.abs(now - targetTime);
-    
-    if (timeDiff < 30 * 60 * 1000) { // Within 30 minutes
+
+    if (timeDiff < 30 * 60 * 1000) {
       const lastCheck = localStorage.getItem('lastNotificationDate');
       const today = new Date().toDateString();
-      
-      // Only notify once per day
+
       if (lastCheck !== today) {
         this.checkForNotifications();
         localStorage.setItem('lastNotificationDate', today);
@@ -168,34 +137,49 @@ class NotificationManager {
     }
   }
 
-  // Check for pending reminders and show notification
+  // UPDATED: Show directly when visible; SW only when not visible
   async checkForNotifications() {
     try {
-      // Dynamically import to avoid circular dependency
       const { videoStore } = await import('../stores/videoStore');
-      
-      // Make sure videos are loaded
+
       if (!videoStore.videos || videoStore.videos.length === 0) {
         await videoStore.loadVideos();
       }
-      
+
       const todaysReminders = videoStore.getTodaysReminders();
       const pendingReminders = todaysReminders.filter(video => {
         return video.currentReminder && !video.currentReminder.completed;
       });
 
       if (pendingReminders.length > 0 && this.permission === 'granted') {
-        // If we have a service worker, ask it to show the notification
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'CHECK_REMINDERS'
-          });
+        const title = 'Futterwacken Reminder';
+        const body = `You have ${pendingReminders.length} video${pendingReminders.length > 1 ? 's' : ''} to review today!`;
+
+        const isVisible = (typeof document !== 'undefined') && document.visibilityState === 'visible';
+
+        if (isVisible) {
+          // App in foreground: show via Notification API (no SW bounce)
+          this.showNotification(title, body);
+        } else if ('serviceWorker' in navigator) {
+          // App not visible: ask SW registration to show
+          try {
+            const registration = await navigator.serviceWorker.ready;
+            await registration.showNotification(title, {
+              body,
+              icon: '/icons/icon-192.png',
+              badge: '/icons/icon-192.png',
+              tag: 'futterwacken-reminder',
+              requireInteraction: false,
+              vibrate: this.settings.vibrate ? [200, 100, 200] : undefined,
+              silent: !this.settings.sound
+            });
+          } catch (e) {
+            // Fallback to Notification API
+            this.showNotification(title, body);
+          }
         } else {
-          // Fallback to regular notification
-          this.showNotification(
-            'Futterwacken Reminder',
-            `You have ${pendingReminders.length} video${pendingReminders.length > 1 ? 's' : ''} to review today!`
-          );
+          // Final fallback
+          this.showNotification(title, body);
         }
       }
     } catch (error) {
@@ -203,12 +187,8 @@ class NotificationManager {
     }
   }
 
-  // Show a notification
   showNotification(title, body, options = {}) {
-    if (this.permission !== 'granted') {
-      console.log('Cannot show notification - permission not granted');
-      return null;
-    }
+    if (this.permission !== 'granted') return null;
 
     const defaultOptions = {
       body,
@@ -222,17 +202,13 @@ class NotificationManager {
 
     try {
       const notification = new Notification(title, { ...defaultOptions, ...options });
-
       notification.onclick = () => {
         window.focus();
         notification.close();
       };
-
       return notification;
     } catch (error) {
       console.error('Error showing notification:', error);
-      
-      // Fallback to service worker notification if available
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then(registration => {
           registration.showNotification(title, { ...defaultOptions, ...options, body });
@@ -242,7 +218,6 @@ class NotificationManager {
     }
   }
 
-  // Test notification
   async testNotification() {
     if (this.permission !== 'granted') {
       const permission = await this.requestPermission();
@@ -253,7 +228,6 @@ class NotificationManager {
     }
 
     try {
-      // Try service worker notification first for better reliability
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.ready;
         if (registration.showNotification) {
@@ -264,16 +238,12 @@ class NotificationManager {
             tag: 'test-notification',
             requireInteraction: false,
             vibrate: [200, 100, 200],
-            actions: [
-              { action: 'close', title: 'Got it!' }
-            ]
+            actions: [{ action: 'close', title: 'Got it!' }]
           });
           console.log('Test notification sent via Service Worker');
           return true;
         }
       }
-      
-      // Fallback to regular notification
       this.showNotification(
         'Test Notification 🎉',
         'Notifications are working! Install the app for background reminders.',
@@ -288,7 +258,6 @@ class NotificationManager {
     }
   }
 
-  // Setup background sync
   async setupBackgroundSync() {
     if (!('serviceWorker' in navigator)) {
       console.log('Service Worker not supported');
@@ -297,14 +266,10 @@ class NotificationManager {
 
     try {
       const registration = await navigator.serviceWorker.ready;
-      
-      // Sync videos first
       await this.syncVideosToServiceWorker();
-      
-      // Check if periodic background sync is supported
+
       if ('periodicSync' in registration) {
         try {
-          // First check if we have permission
           const status = await navigator.permissions.query({
             name: 'periodic-background-sync'
           });
@@ -312,14 +277,12 @@ class NotificationManager {
           console.log('Periodic background sync permission:', status.state);
           
           if (status.state === 'granted') {
-            // Register periodic sync with the user's preferred time
             await registration.periodicSync.register('check-reminders-daily', {
-              minInterval: 12 * 60 * 60 * 1000 // 12 hours minimum
+              minInterval: 12 * 60 * 60 * 1000
             });
             console.log('✅ Periodic background sync registered successfully');
             return true;
           } else if (status.state === 'prompt') {
-            // Try to register anyway - might prompt user
             try {
               await registration.periodicSync.register('check-reminders-daily', {
                 minInterval: 12 * 60 * 60 * 1000
@@ -338,8 +301,6 @@ class NotificationManager {
         }
       } else {
         console.log('⚠️ Periodic background sync not supported on this browser');
-        
-        // Fallback: use regular sync if available
         if ('sync' in registration) {
           try {
             await registration.sync.register('check-reminders');
@@ -358,12 +319,10 @@ class NotificationManager {
     return false;
   }
 
-  // Get permission status
   getPermissionStatus() {
     return this.permission;
   }
 
-  // Update permission status
   async updatePermissionStatus() {
     if (typeof Notification !== 'undefined') {
       this.permission = Notification.permission;
@@ -371,7 +330,6 @@ class NotificationManager {
     return this.permission;
   }
 
-  // Clean up
   destroy() {
     if (this.dailyCheckInterval) {
       clearInterval(this.dailyCheckInterval);
@@ -380,22 +338,18 @@ class NotificationManager {
   }
 }
 
-// Create a singleton instance
 const notificationManager = new NotificationManager();
 
-// Listen for messages from Service Worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data && event.data.type === 'check-reminders') {
+      // When SW pings while app is open, run a check and show directly if pending
       notificationManager.checkForNotifications();
     }
   });
 }
 
-// Export the manager instance and methods
 export { notificationManager };
-
-// Also export individual functions for backward compatibility
 export const requestNotificationPermission = () => notificationManager.requestPermission();
 export const scheduleBackgroundSync = () => notificationManager.setupBackgroundSync();
 export const testNotification = () => notificationManager.testNotification();
