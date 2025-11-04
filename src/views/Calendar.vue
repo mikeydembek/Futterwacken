@@ -85,6 +85,19 @@
             {{ getStatusText(rem) }}
           </span>
 
+          <!-- NEW: Edit button (pencil icon) -->
+          <button
+            class="icon-btn edit-btn"
+            @click="openEdit(rem)"
+            aria-label="Edit video"
+            title="Edit video"
+          >
+            <svg class="pencil-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 21h4l11.5-11.5a2.121 2.121 0 0 0 0-3l-1-1a2.121 2.121 0 0 0-3 0L3 16v5z" />
+              <path d="M14 7l3 3" />
+            </svg>
+          </button>
+
           <!-- Delete button: simple trash can icon, currentColor stroke -->
           <button
             class="icon-btn delete-btn"
@@ -104,6 +117,47 @@
       </div>
     </div>
   </div>
+
+  <!-- NEW: Edit Modal -->
+  <div v-if="showEditModal" class="modal-overlay" @click="closeEdit">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h3>Edit Video</h3>
+        <button class="close-btn" @click="closeEdit" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-row">
+          <label class="label" for="edit-title">Title</label>
+          <input
+            id="edit-title"
+            class="input"
+            type="text"
+            v-model.trim="editDraftTitle"
+            maxlength="100"
+            placeholder="Enter title"
+          />
+        </div>
+
+        <div class="form-row">
+          <label class="label" for="edit-notes">Notes</label>
+          <textarea
+            id="edit-notes"
+            class="input textarea"
+            rows="4"
+            v-model="editDraftNotes"
+            placeholder="Add notes"
+            maxlength="500"
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" @click="closeEdit">Cancel</button>
+        <button class="btn btn-primary" :disabled="!editDraftTitle" @click="saveEdit">Save</button>
+      </div>
+    </div>
+  </div>
 </div>
 </template>
 
@@ -117,7 +171,13 @@ data() {
     currentMonth: new Date().getMonth(),
     currentYear: new Date().getFullYear(),
     selectedDate: null,
-    weekdays: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+    weekdays: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+
+    // NEW: edit modal state
+    showEditModal: false,
+    editingVideoId: null,
+    editDraftTitle: '',
+    editDraftNotes: ''
   };
 },
 computed: {
@@ -156,26 +216,29 @@ computed: {
   },
   selectedDayReminders() {
     if (!this.selectedDate) return [];
-    const found = this.calendarDays.find(d => d.dateString === this.selectedDate);
+    const found = this.calendarDays.find(function(d) { return d.dateString === this.selectedDate; }.bind(this));
     return found ? found.reminders : [];
   },
   selectedDateDisplay() {
     if (!this.selectedDate) return '';
-    const [y, m, d] = this.selectedDate.split('-');
-    const date = new Date(+y, +m - 1, +d);
+    const parts = this.selectedDate.split('-');
+    const y = +parts[0];
+    const m = +parts[1] - 1;
+    const d = +parts[2];
+    const date = new Date(y, m, d);
     return date.toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
     });
   },
   monthRemindersCount() {
-    return this.calendarDays.reduce((sum, d) => {
+    return this.calendarDays.reduce(function(sum, d) {
       return sum + (d.isCurrentMonth ? d.reminders.length : 0);
     }, 0);
   },
   completedCount() {
-    return this.calendarDays.reduce((sum, d) => {
+    return this.calendarDays.reduce(function(sum, d) {
       if (!d.isCurrentMonth) return sum;
-      return sum + d.reminders.filter(r => r.currentReminder && r.currentReminder.completed).length;
+      return sum + d.reminders.filter(function(r) { return r.currentReminder && r.currentReminder.completed; }).length;
     }, 0);
   },
   pendingCount() {
@@ -208,7 +271,7 @@ methods: {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return y + '-' + m + '-' + d;
   },
   getRemindersForDate(date) {
     const reminders = [];
@@ -217,39 +280,44 @@ methods: {
 
     if (!videoStore || !videoStore.videos) return reminders;
 
-    videoStore.videos.forEach(video => {
+    videoStore.videos.forEach(function(video) {
       if (!video.isActive && !video.repeatMonthly) return;
 
-      // regular reminders
       if (video.reminders) {
-        video.reminders.forEach((rem, idx) => {
+        video.reminders.forEach(function(rem, idx) {
           const rDate = new Date(rem.date);
           if (rDate >= start && rDate <= end) {
-            reminders.push({ ...video, currentReminder: rem, reminderIndex: idx });
+            reminders.push(assign({}, video, { currentReminder: rem, reminderIndex: idx }));
           }
         });
       }
 
-      // monthly repeats (simple projection)
       if (video.repeatMonthly) {
         const last = new Date(video.repeatMonthly.lastDate || video.dateAdded || new Date());
-        // Check some future occurrences
         for (let i = 1; i <= 6; i++) {
           const occ = new Date(last);
           occ.setMonth(occ.getMonth() + i);
           occ.setHours(0, 0, 0, 0);
           if (occ >= start && occ <= end) {
-            reminders.push({
-              ...video,
+            reminders.push(assign({}, video, {
               currentReminder: { day: 'Monthly', date: occ.toISOString(), completed: false },
               reminderIndex: -1
-            });
+            }));
             break;
           }
         }
       }
     });
+
     return reminders;
+
+    function assign(target) {
+      for (var i = 1; i < arguments.length; i++) {
+        var src = arguments[i];
+        for (var k in src) { target[k] = src[k]; }
+      }
+      return target;
+    }
   },
   getDotClass(reminder) {
     if (reminder.currentReminder && reminder.currentReminder.completed) return 'dot-done';
@@ -274,16 +342,54 @@ methods: {
     if (!reminder) return '';
     if (reminder.day === 'Monthly') return 'Monthly';
     const map = { 1: 'Day 1', 2: 'Day 2', 5: 'Day 5', 12: 'Day 12', 42: 'Day 42' };
-    return map[reminder.day] || `Day ${reminder.day}`;
+    return map[reminder.day] || ('Day ' + reminder.day);
   },
 
-  // NEW: confirm and delete the entire video (metadata + any stored file)
+  // NEW: open edit modal
+  openEdit(rem) {
+    this.editingVideoId = rem.id;
+    this.editDraftTitle = rem.title || '';
+    this.editDraftNotes = rem.notes || '';
+    this.showEditModal = true;
+    try { document.body.style.overflow = 'hidden'; } catch (_) {}
+  },
+
+  // NEW: close edit modal
+  closeEdit() {
+    this.showEditModal = false;
+    this.editingVideoId = null;
+    this.editDraftTitle = '';
+    this.editDraftNotes = '';
+    try { document.body.style.overflow = ''; } catch (_) {}
+  },
+
+  // NEW: save edits (title/notes only)
+  async saveEdit() {
+    if (!this.editDraftTitle) return;
+    try {
+      const ok = videoStore.updateVideoFields
+        ? videoStore.updateVideoFields(this.editingVideoId, {
+            title: this.editDraftTitle,
+            notes: this.editDraftNotes
+          })
+        : false;
+      if (!ok) {
+        alert('Could not update this video. Please try again.');
+      }
+    } catch (e) {
+      console.error('Edit save failed:', e);
+      alert('Could not update this video.');
+    } finally {
+      this.closeEdit();
+    }
+  },
+
+  // confirm and delete the entire video (metadata + any stored file)
   async confirmDelete(rem) {
     const ok = window.confirm('Are you sure you want to delete this video?');
     if (!ok) return;
     try {
       await videoStore.deleteVideo(rem.id);
-      // UI updates reactively via computed properties
     } catch (e) {
       console.error('Delete failed:', e);
       alert('Failed to delete this video. Please try again.');
@@ -306,7 +412,6 @@ mounted() {
 height: 100%;
 overflow-y: auto;
 padding-bottom: 80px;
-/* New, darker gray background */
 background: #1F2937;
 }
 
@@ -323,8 +428,8 @@ align-items: center;
 gap: var(--space-sm);
 padding: 8px 16px;
 background: var(--accent-primary);
-border-top: 1px solid #1F2937;    /* match tab background */
-border-bottom: 1px solid #1F2937; /* match tab background */
+border-top: 1px solid #1F2937;
+border-bottom: 1px solid #1F2937;
 border-radius: 20px;
 box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
 margin: var(--space-md);
@@ -435,7 +540,6 @@ border-radius: 48px;
 border: 1px solid var(--bg-tertiary);
 background: var(--bg-secondary);
 padding: var(--space-md);
-/* New shadow to create a "hovering" effect */
 box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
 }
 .details-title {
@@ -461,7 +565,7 @@ gap: 8px;
 
 .reminder-item {
 display: grid;
-grid-template-columns: 1fr auto auto; /* NEW: room for delete icon */
+grid-template-columns: 1fr auto auto auto; /* title group + status + edit + delete */
 align-items: center;
 padding: 10px;
 background: var(--bg-tertiary);
@@ -530,7 +634,7 @@ color: var(--accent-primary);
 background: rgba(59, 130, 246, 0.15);
 }
 
-/* NEW: icon button for delete */
+/* Icon buttons */
 .icon-btn {
 width: 32px;
 height: 32px;
@@ -549,18 +653,92 @@ transition: color .15s ease, transform .1s ease;
 .delete-btn:focus-visible {
 color: var(--accent-danger);
 }
+.edit-btn:hover,
+.edit-btn:focus-visible {
+color: var(--accent-primary);
+}
 
-/* NEW: trash icon style (stroke uses currentColor) */
-.trash-icon {
+/* Trash icon (stroke uses currentColor) */
+.trash-icon, .pencil-icon {
 width: 20px;
 height: 20px;
 display: block;
 }
-.trash-icon path {
+.trash-icon path,
+.pencil-icon path {
 fill: none;
 stroke: currentColor;
 stroke-width: 2;
 stroke-linecap: round;
 stroke-linejoin: round;
 }
+
+/* Edit Modal styles */
+.modal-overlay {
+position: fixed; inset: 0;
+background: rgba(0,0,0,0.75);
+display: grid; place-items: center;
+z-index: 1000;
+padding: var(--space-md);
+}
+.modal-content {
+width: 100%; max-width: 520px;
+border-radius: 32px;
+border: 1px solid var(--bg-tertiary);
+background: var(--bg-secondary);
+padding: 0; /* header/body/actions manage their own padding */
+}
+.modal-header {
+display: grid;
+grid-template-columns: 1fr auto;
+align-items: center;
+padding: var(--space-md);
+border-bottom: 1px solid var(--bg-tertiary);
+}
+.modal-header h3 {
+margin: 0;
+font-size: 16px;
+color: var(--text-primary);
+text-align: center;
+}
+.close-btn {
+width: 36px; height: 36px;
+border-radius: 9999px;
+background: var(--bg-tertiary);
+border: none; color: var(--text-primary);
+display: grid; place-items: center;
+cursor: pointer;
+}
+.modal-body {
+padding: var(--space-md);
+display: flex; flex-direction: column;
+gap: var(--space-md);
+}
+.form-row { display: flex; flex-direction: column; gap: 6px; }
+.label { font-size: 12px; color: var(--text-secondary); }
+.input {
+width: 100%;
+min-height: 44px;
+border-radius: var(--radius-full);
+background: var(--bg-tertiary);
+border: 1px solid transparent;
+color: var(--text-primary);
+padding: 0 var(--space-md);
+font-size: 14px;
+}
+.textarea {
+min-height: 110px;
+padding-top: var(--space-sm);
+padding-bottom: var(--space-sm);
+border-radius: 16px;
+resize: vertical;
+}
+.input:focus { border-color: var(--accent-primary); outline: none; }
+
+.modal-actions {
+display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm);
+padding: var(--space-md);
+border-top: 1px solid var(--bg-tertiary);
+}
+.btn { width: 100%; }
 </style>
