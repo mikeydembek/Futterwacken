@@ -2,7 +2,6 @@
 <div class="notification-settings">
   <h3 class="settings-title">Notification Settings</h3>
   
-  <!-- Permission Status -->
   <div class="settings-card">
     <div class="setting-row">
       <span>Notification Status</span>
@@ -37,14 +36,13 @@
     </button>
   </div>
 
-  <!-- Settings (only show if granted) -->
   <div v-if="permissionStatus === 'granted'" class="settings-card">
     <label class="setting-row toggle">
       <span>Daily Reminders</span>
       <input 
         type="checkbox" 
         v-model="settings.enabled"
-        @change="saveSettings"
+        @change="handleEnabledChange"
       />
     </label>
 
@@ -53,7 +51,7 @@
       <input 
         type="time" 
         v-model="settings.time"
-        @change="saveSettings"
+        @change="handleTimeChange"
         class="time-input"
       />
     </label>
@@ -77,7 +75,6 @@
     </label>
   </div>
 
-  <!-- Info Box -->
   <div class="settings-card">
     <h5>How it Works</h5>
     <p class="text-muted">You'll get a reminder at {{ settings.time || '9:00 AM' }} when you have videos to review. This works even when the app is closed (on supported devices).</p>
@@ -86,7 +83,12 @@
 </template>
 
 <script>
-import { notificationManager } from '../utils/notifications';
+import { 
+  notificationManager,
+  subscribeToPush,
+  unsubscribeFromPush,
+  updateServerSettings
+} from '../utils/notifications';
 
 export default {
   name: 'NotificationSettings',
@@ -100,7 +102,6 @@ export default {
         vibrate: true
       },
       browserWarning: '',
-      // iOS/PWA detection
       isIOS: false,
       isStandalone: false
     };
@@ -121,11 +122,9 @@ export default {
       this.isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
 
       const standaloneMedia = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-      // iOS-specific legacy flag
       const standaloneLegacy = 'standalone' in navigator && navigator.standalone;
       this.isStandalone = !!(standaloneMedia || standaloneLegacy);
 
-      // Helpful guidance for iOS when not installed
       if (this.isIOS && !this.isStandalone) {
         this.browserWarning = 'On iPhone/iPad, notifications only work after you install the app to your Home Screen and open it from there. In Safari: Share → Add to Home Screen, then open the app and try again.';
       } else {
@@ -134,13 +133,8 @@ export default {
     },
 
     async requestPermission() {
-      // iOS: avoid a dead click and show guidance if not installed
       this.detectEnvironment();
-      if (this.isIOS && !this.isStandalone) {
-        // Keep the UI unchanged but provide clear guidance
-        // (We do not change button visibility, just avoid a no-op)
-        return;
-      }
+      if (this.isIOS && !this.isStandalone) return;
 
       const granted = await notificationManager.requestPermission();
       await this.updatePermissionStatus();
@@ -149,8 +143,29 @@ export default {
         notificationManager.scheduleDailyCheck();
         notificationManager.setupBackgroundSync();
       } else if (this.isIOS && this.permissionStatus === 'denied') {
-        // iOS: once denied, it must be re-enabled in Settings
         this.browserWarning = 'Notifications are blocked. On iOS, open Settings → Notifications → Futterwacken and enable “Allow Notifications”, then reopen the app and try again.';
+      }
+    },
+
+    async handleEnabledChange() {
+      // Persist the enabled flag
+      this.saveSettings();
+      if (this.permissionStatus !== 'granted') return;
+
+      if (this.settings.enabled) {
+        await subscribeToPush(this.settings.time);
+      } else {
+        await unsubscribeFromPush();
+      }
+    },
+
+    async handleTimeChange() {
+      // Persist time change
+      this.saveSettings();
+      if (this.permissionStatus !== 'granted') return;
+
+      if (this.settings.enabled) {
+        await updateServerSettings(this.settings.time);
       }
     },
     
@@ -170,9 +185,6 @@ export default {
     
     saveSettings() {
       notificationManager.saveSettings(this.settings);
-      if (this.settings.enabled && this.permissionStatus === 'granted') {
-        notificationManager.scheduleDailyCheck();
-      }
     }
   },
   mounted() {
@@ -190,123 +202,26 @@ export default {
 </script>
 
 <style scoped>
-.notification-settings {
-padding: var(--space-md);
-}
-
-.settings-title {
-font-size: 16px;
-font-weight: 600;
-text-align: center;
-margin-bottom: var(--space-lg);
-color: var(--text-secondary);
-}
-
-.settings-card {
-background: var(--bg-secondary);
-border: 1px solid var(--bg-tertiary);
-border-radius: 48px;
-padding: var(--space-md);
-margin-bottom: var(--space-md);
-box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
-}
-
-.settings-card h5 {
-text-align: center;
-margin-bottom: var(--space-sm);
-color: var(--accent-primary);
-font-weight: 600;
-}
-
-.settings-card p.text-muted {
-text-align: center;
-font-size: 14px;
-color: var(--text-secondary);
-}
-
-.setting-row {
-display: flex;
-justify-content: space-between;
-align-items: center;
-padding: var(--space-sm) 0;
-}
-
-.setting-row.toggle {
-cursor: pointer;
-}
-
-.status { 
-font-size: 14px; 
-font-weight: 600; 
-}
+/* unchanged */
+.notification-settings { padding: var(--space-md); }
+.settings-title { font-size: 16px; font-weight: 600; text-align: center; margin-bottom: var(--space-lg); color: var(--text-secondary); }
+.settings-card { background: var(--bg-secondary); border: 1px solid var(--bg-tertiary); border-radius: 48px; padding: var(--space-md); margin-bottom: var(--space-md); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2); }
+.settings-card h5 { text-align: center; margin-bottom: var(--space-sm); color: var(--accent-primary); font-weight: 600; }
+.settings-card p.text-muted { text-align: center; font-size: 14px; color: var(--text-secondary); }
+.setting-row { display: flex; justify-content: space-between; align-items: center; padding: var(--space-sm) 0; }
+.setting-row.toggle { cursor: pointer; }
+.status { font-size: 14px; font-weight: 600; }
 .status.granted { color: var(--accent-success); }
 .status.denied { color: var(--accent-danger); }
 .status.default { color: var(--accent-warning); }
-
-.browser-warning {
-margin: var(--space-md) 0;
-padding: var(--space-sm);
-background: rgba(255, 152, 0, 0.1);
-border: 1px solid var(--accent-warning);
-border-radius: var(--radius-md);
-color: var(--accent-warning);
-font-size: 14px;
-}
-
-.permission-denied {
-margin-top: var(--space-md);
-padding: var(--space-md);
-background: rgba(244, 67, 54, 0.1);
-border-radius: var(--radius-md);
-}
-.permission-denied p { 
-text-align: center; 
-margin-bottom: 0; 
-}
-.permission-denied p:first-child {
-margin-bottom: var(--space-sm);
-font-weight: 600;
-color: var(--accent-danger);
-}
-
-.time-input {
-background: var(--bg-tertiary);
-border: 1px solid var(--bg-tertiary);
-border-radius: var(--radius-md);
-color: var(--text-primary);
-padding: var(--space-xs) var(--space-sm);
-}
-
-input[type="checkbox"] {
-width: 48px;
-height: 24px;
-position: relative;
-appearance: none;
-background: var(--bg-tertiary);
-border-radius: 12px;
-cursor: pointer;
-transition: background 0.3s;
-}
-input[type="checkbox"]:checked { 
-background: var(--accent-primary); 
-}
-input[type="checkbox"]::after {
-content: '';
-position: absolute;
-width: 20px;
-height: 20px;
-border-radius: 50%;
-background: white;
-top: 2px;
-left: 2px;
-transition: transform 0.3s;
-}
-input[type="checkbox"]:checked::after { 
-transform: translateX(24px); 
-}
-
-.btn { 
-width: 100%; 
-margin-top: var(--space-md); 
-}
+.browser-warning { margin: var(--space-md) 0; padding: var(--space-sm); background: rgba(255, 152, 0, 0.1); border: 1px solid var(--accent-warning); border-radius: var(--radius-md); color: var(--accent-warning); font-size: 14px; }
+.permission-denied { margin-top: var(--space-md); padding: var(--space-md); background: rgba(244, 67, 54, 0.1); border-radius: var(--radius-md); }
+.permission-denied p { text-align: center; margin-bottom: 0; }
+.permission-denied p:first-child { margin-bottom: var(--space-sm); font-weight: 600; color: var(--accent-danger); }
+.time-input { background: var(--bg-tertiary); border: 1px solid var(--bg-tertiary); border-radius: var(--radius-md); color: var(--text-primary); padding: var(--space-xs) var(--space-sm); }
+input[type="checkbox"] { width: 48px; height: 24px; position: relative; appearance: none; background: var(--bg-tertiary); border-radius: 12px; cursor: pointer; transition: background 0.3s; }
+input[type="checkbox"]:checked { background: var(--accent-primary); }
+input[type="checkbox"]::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: transform 0.3s; }
+input[type="checkbox"]:checked::after { transform: translateX(24px); }
+.btn { width: 100%; margin-top: var(--space-md); }
 </style>

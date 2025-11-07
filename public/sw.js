@@ -69,37 +69,57 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Function to check for reminders and show notification
+// NEW: Handle Web Push – display notification payload from server
+self.addEventListener('push', (event) => {
+  try {
+    let data = { title: 'Futterwacken Reminder', body: 'You have videos to review today!' };
+    if (event.data) {
+      try {
+        const json = event.data.json();
+        data.title = json.title || data.title;
+        data.body = json.body || data.body;
+      } catch (_) {
+        // if not JSON, fallback to text
+        data.body = event.data.text() || data.body;
+      }
+    }
+    event.waitUntil(
+      self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        tag: 'futterwacken-push',
+        requireInteraction: false,
+        vibrate: [200, 100, 200],
+        data
+      })
+    );
+  } catch (e) {
+    console.error('Push event error:', e);
+  }
+});
+
+// Function to check for reminders and show notification (when SW wakes via sync)
 async function checkAndNotify() {
   try {
     console.log('Checking for reminders...');
     
-    // Get all clients (open tabs/windows)
     const allClients = await clients.matchAll({ type: 'window' });
-    
-    // If app is open, let it handle notifications
     if (allClients.length > 0) {
-      // Send message to client to check
       allClients.forEach(client => {
         client.postMessage({ type: 'check-reminders' });
       });
       return;
     }
     
-    // App is closed, we need to check ourselves
-    // Get the last check time
     const lastCheckKey = 'lastNotificationDate';
     const today = new Date().toDateString();
-    
-    // Try to get data from IndexedDB (for last check)
     const lastCheck = await getFromIndexedDB(lastCheckKey);
-    
     if (lastCheck === today) {
       console.log('Already checked today');
       return;
     }
     
-    // Get videos from cache (we'll cache them when app is open)
     const cache = await caches.open('data-cache-v1');
     const cachedResponse = await cache.match('/api/videos');
     
@@ -110,7 +130,6 @@ async function checkAndNotify() {
       console.log('SW: No cached videos found at /api/videos');
     }
     
-    // Check for today's pending reminders
     const todaysReminders = getTodaysReminders(videos);
     const pendingCount = todaysReminders.filter(r => !r.completed).length;
     
@@ -123,22 +142,11 @@ async function checkAndNotify() {
         requireInteraction: false,
         vibrate: [200, 100, 200],
         actions: [
-          {
-            action: 'open',
-            title: 'Open App'
-          },
-          {
-            action: 'dismiss',
-            title: 'Dismiss'
-          }
+          { action: 'open', title: 'Open App' },
+          { action: 'dismiss', title: 'Dismiss' }
         ],
-        data: {
-          dateOfArrival: Date.now(),
-          pendingCount: pendingCount
-        }
+        data: { dateOfArrival: Date.now(), pendingCount }
       });
-      
-      // Mark as checked
       await saveToIndexedDB(lastCheckKey, today);
     }
     
@@ -148,23 +156,19 @@ async function checkAndNotify() {
   }
 }
 
-// Helper function to parse today's reminders
 function getTodaysReminders(videos) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayTime = today.getTime();
   
   const reminders = [];
-  
   videos.forEach(video => {
     if (!video.isActive) return;
-    
     if (video.reminders) {
       video.reminders.forEach(reminder => {
-        const reminderDate = new Date(reminder.date);
-        reminderDate.setHours(0, 0, 0, 0);
-        
-        if (reminderDate.getTime() === todayTime) {
+        const d = new Date(reminder.date);
+        d.setHours(0, 0, 0, 0);
+        if (d.getTime() === todayTime) {
           reminders.push({
             videoId: video.id,
             title: video.title,
@@ -174,14 +178,11 @@ function getTodaysReminders(videos) {
         }
       });
     }
-    
-    // Check monthly reminders
     if (video.repeatMonthly) {
       const lastDate = new Date(video.repeatMonthly.lastDate);
       const nextMonthly = new Date(lastDate);
       nextMonthly.setMonth(nextMonthly.getMonth() + 1);
       nextMonthly.setHours(0, 0, 0, 0);
-      
       if (nextMonthly.getTime() === todayTime) {
         reminders.push({
           videoId: video.id,
@@ -192,28 +193,21 @@ function getTodaysReminders(videos) {
       }
     }
   });
-  
   return reminders;
 }
 
-// Handle notification click
+// Click handling – unchanged
 self.addEventListener('notificationclick', (event) => {
   console.log('Notification clicked:', event.action);
   event.notification.close();
-  
-  if (event.action === 'dismiss') {
-    return;
-  }
-  
+  if (event.action === 'dismiss') return;
   event.waitUntil(
     clients.matchAll({ type: 'window' }).then((clientList) => {
-      // Check if there's already a window/tab open
       for (const client of clientList) {
         if (client.url.includes(self.registration.scope) && 'focus' in client) {
           return client.focus();
         }
       }
-      // If not, open a new window/tab
       if (clients.openWindow) {
         return clients.openWindow('/');
       }
@@ -221,15 +215,12 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Message event listener for communication with the app
+// Messaging – unchanged
 self.addEventListener('message', (event) => {
   console.log('Service Worker received message:', event.data);
-  
   if (event.data && event.data.type === 'CHECK_REMINDERS') {
     event.waitUntil(checkAndNotify());
   }
-  
-  // Cache videos data when sent from the app
   if (event.data && event.data.type === 'CACHE_VIDEOS') {
     event.waitUntil(
       caches.open('data-cache-v1').then(cache => {
@@ -242,14 +233,12 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Helper functions for IndexedDB (for storing last check time)
+// IndexedDB helpers – unchanged
 function openIndexedDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('ServiceWorkerData', 1);
-    
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
-    
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains('data')) {
@@ -280,7 +269,6 @@ async function getFromIndexedDB(key) {
     const transaction = db.transaction(['data'], 'readonly');
     const store = transaction.objectStore('data');
     const request = store.get(key);
-    
     return new Promise((resolve, reject) => {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
